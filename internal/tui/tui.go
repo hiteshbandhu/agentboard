@@ -86,6 +86,7 @@ func Render(h *hub.Hub, opt Options, w, ht int) string {
 
 type logo struct {
 	small, large []string // 4×2 and 8×4 cells
+	tiny         string   // 2×1 cells, for one-line spots like the top bar
 }
 
 type logosMsg struct {
@@ -108,11 +109,13 @@ func loadLogos(ctx context.Context, opt Options) logosMsg {
 		img := termimg.Downscale(ic.Image, 128)
 		switch opt.Images {
 		case termimg.Kitty:
-			idS, idL := uint32(0xA1B000+i*2+1), uint32(0xA1B000+i*2+2)
-			out.transmit += termimg.Transmit(idS, img, smallW, smallH) + termimg.Transmit(idL, img, largeW, largeH)
-			out.logos[p] = logo{termimg.Cells(idS, smallW, smallH), termimg.Cells(idL, largeW, largeH)}
+			idS, idL, idT := uint32(0xA1B000+i*3+1), uint32(0xA1B000+i*3+2), uint32(0xA1B000+i*3+3)
+			out.transmit += termimg.Transmit(idS, img, smallW, smallH) + termimg.Transmit(idL, img, largeW, largeH) +
+				termimg.Transmit(idT, img, 2, 1)
+			out.logos[p] = logo{small: termimg.Cells(idS, smallW, smallH), large: termimg.Cells(idL, largeW, largeH),
+				tiny: termimg.Cells(idT, 2, 1)[0]}
 		case termimg.Blocks:
-			out.logos[p] = logo{termimg.HalfBlocks(img, smallW, smallH), termimg.HalfBlocks(img, largeW, largeH)}
+			out.logos[p] = logo{small: termimg.HalfBlocks(img, smallW, smallH), large: termimg.HalfBlocks(img, largeW, largeH)}
 		}
 	}
 	return out
@@ -560,10 +563,11 @@ func (m *uiModel) topBar() string {
 	mid := strings.Join(chips, "   ")
 
 	now := time.Now()
-	right := fg(cMuted).Render(now.Format("Mon 2 Jan")+"  ") +
+	limits := m.limitChips()
+	right := limits + fg(cMuted).Render(now.Format("Mon 2 Jan")+"  ") +
 		lipgloss.NewStyle().Bold(true).Foreground(cFg).Render(now.Format("15:04:05")) + strings.Repeat(" ", margin)
 	if m.w < 100 {
-		right = lipgloss.NewStyle().Bold(true).Foreground(cFg).Render(now.Format("15:04")) + strings.Repeat(" ", margin)
+		right = limits + lipgloss.NewStyle().Bold(true).Foreground(cFg).Render(now.Format("15:04")) + strings.Repeat(" ", margin)
 	}
 	if lipgloss.Width(left)+lipgloss.Width(mid)+lipgloss.Width(right)+6 > m.w {
 		mid = ""
@@ -571,6 +575,42 @@ func (m *uiModel) topBar() string {
 	space := m.w - lipgloss.Width(left) - lipgloss.Width(mid) - lipgloss.Width(right)
 	l := max(3, space/2)
 	return left + strings.Repeat(" ", l) + mid + strings.Repeat(" ", max(1, space-l)) + right
+}
+
+// limitChips shows plan limits at a glance: "✻ 5h 23%  ✻ 7d 71%  >_ 30d 0%".
+func (m *uiModel) limitChips() string {
+	if m.usage == nil || len(m.usage.today.RateLimits) == 0 {
+		return ""
+	}
+	rl := m.usage.today.RateLimits
+	keys := make([]string, 0, len(rl))
+	for k := range rl {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	var parts []string
+	for _, k := range keys {
+		l := rl[k]
+		var c lipgloss.TerminalColor = cGreen
+		switch {
+		case l.UsedPercent >= 80:
+			c = cRed
+		case l.UsedPercent >= 50:
+			c = cAmber
+		}
+		// The real app icon where the terminal can draw images, else its mark.
+		mark := fg(providerColor(l.Provider)).Render(strings.Fields(providerMark(l.Provider))[0])
+		if lg, ok := m.logos[l.Provider]; ok && lg.tiny != "" {
+			mark = lg.tiny
+		}
+		win := ""
+		if l.WindowMin > 0 {
+			win = " " + shortWindow(l.WindowMin)
+		}
+		parts = append(parts, mark+fg(cMuted).Render(win+" ")+
+			lipgloss.NewStyle().Bold(true).Foreground(c).Render(fmt.Sprintf("%.0f%%", l.UsedPercent)))
+	}
+	return strings.Join(parts, "   ") + "     "
 }
 
 func (m *uiModel) counts() (waiting, busy, idle int) {

@@ -1,89 +1,148 @@
+<div align="center">
+
 # agentboard
 
-A live status wall for every coding agent you're running: Claude Code and Codex, on this machine and on your servers. Put it on a second display and see at a glance who's working, who's done, and who needs you.
+**A live board for your coding agents.**
+Claude Code and Codex, on this machine and your servers, in your terminal, menu bar and notch.
 
-![agentboard --demo](docs/demo.png)
+![agentboard in the notch](docs/notch.gif)
+
+[Install](#install) · [The board](#the-board) · [Notch & menu bar](#notch--menu-bar) · [Usage & limits](#usage--limits) · [Other machines](#other-machines) · [Privacy](#privacy)
+
+</div>
+
+---
+
+You start an agent, switch to something else, and ten minutes later wonder: is it done? Is it stuck waiting for approval? Which of the five terminals was it in? agentboard answers that at a glance:
+
+- **Who's working, who's idle, who needs you**: every Claude Code and Codex session, live.
+- **What each one is doing**: current tool, last prompt, model, context size.
+- **Across machines**: your laptop, dev box and GPU server on one board, over plain SSH.
+- **How much you use them**: agent-hours, tokens, cache hits, plan limits.
+
+It only reads. It never sends prompts, approves anything, or talks to your agents.
 
 ## Install
 
 ```bash
-brew install hiteshbandhu/tap/agentboard          # the terminal board (macOS, Linux)
+brew install hiteshbandhu/tap/agentboard             # the board (macOS, Linux)
 brew install --cask hiteshbandhu/tap/agentboard-app  # menu bar + notch app (macOS 14+)
 ```
 
-Or grab a binary from [Releases](https://github.com/hiteshbandhu/agentboard/releases), or build it yourself with `go build ./cmd/agentboard`.
-
-## Use
+Or download a binary from [Releases](https://github.com/hiteshbandhu/agentboard/releases), or build from source with Go 1.26+:
 
 ```bash
-agentboard                 # the wall
-agentboard --demo          # synthetic fleet, to try it or take screenshots
-agentboard --host dev@gpu-box --host build-01
-agentboard usage           # how much you use agents
-agentboard --once          # table, exit
-agentboard --json          # snapshot for scripts
+go install github.com/hiteshbandhu/agentboard/cmd/agentboard@latest
 ```
 
-Keys: arrows/hjkl move · `f` cycle provider · `s` show stale sessions · `q` quit.
+Then:
 
-## Logos
+```bash
+agentboard          # the board
+agentboard --demo   # a demo fleet, to see it before your agents are running
+```
 
-Each card shows its provider's logo, drawn as a real image in the terminal. Nothing extra to install:
+## The board
 
-| Terminal | How it draws |
+![the board](docs/demo.png)
+
+Cards are grouped into **Needs you → Working → Idle**. Working cards spin; cards that need you pulse amber and say why (a permission prompt, a question, an error). Each card shows the project, model, context size, current tool, last prompt and a timeline of recent activity, and the waveform up top is your whole fleet over the last few minutes.
+
+| Key | |
 |---|---|
-| Ghostty, cmux, kitty, WezTerm | crisp pixel image via the kitty graphics protocol (Unicode placeholders) |
-| iTerm2, Terminal.app, anything truecolor | pixel-art approximation from colored half-block characters |
-| no truecolor, or `--images off` | text marks: `✻ Claude`, `>_ Codex` |
+| ← ↑ ↓ → | move between cards |
+| `f` | filter: all / Claude / Codex |
+| `s` | show sessions idle for over a day |
+| `u` | usage & limits |
+| `q` | quit |
 
-agentboard ships no brand artwork. It finds logos at runtime, in this order:
-1. the installed app's own icon: `Claude.app`, `Codex.app` or `ChatGPT.app`;
-2. a copy cached from an earlier run;
-3. for Claude, the mark from [Simple Icons](https://simpleicons.org) on jsDelivr (pinned to v16.33.0) on a clay tile, cached under your user cache directory. Simple Icons no longer carries OpenAI's mark, so Codex gets a plain `>_` tile drawn locally.
+Put it on a second display and leave it there.
 
-Pass `--no-fetch` to never touch the network, or `--images blocks|kitty|off` to override detection.
-
-## Menu bar and notch (macOS)
+## Notch & menu bar
 
 ![the notch](docs/notch.png)
 
-Install the app with the cask above, or build it: `macos/build.sh --install`.
+On a MacBook, agentboard lives around the notch: small ears show who's working, it drops open when an agent needs you or finishes a long task, and hovering the notch lists everything in flight. It never takes clicks.
 
-A menu-bar app built on the same data (it runs the bundled `agentboard --stream`):
+<img src="docs/menu.png" width="300" align="right" alt="the menu bar menu">
 
-- **Menu bar**: counts of working agents and agents that need you; the dropdown lists every agent with its real app icon, today's usage and plan-limit gauges.
-- **Notch**: on MacBooks with a notch, small "ears" beside it show working/needs-you counts. It drops down for a few seconds when an agent needs you or finishes, and hovering over the notch expands it into a list. It never takes clicks.
-- **Alerts**: a macOS notification when an agent needs you, or finishes a turn longer than a minute.
+The menu bar item is a regular macOS menu: agents with their project and status, today's usage, plan limits, and shortcuts to open the board. You also get a notification when an agent needs you.
 
-## Plan limits
+Settings let you turn the notch, notifications, the agent count and plan usage in the menu bar on or off, and launch at login.
 
-- **Codex**: read from Codex's own logs automatically.
-- **Claude Code**: Claude Code only gives its 5-hour and 7-day limits to status-line scripts. Set agentboard as your status line to capture them:
+<br clear="right">
 
-  ```json
-  { "statusLine": { "type": "command", "command": "agentboard statusline" } }
+## Usage & limits
+
+![usage](docs/usage.png)
+
+Press `u` on the board, or run `agentboard usage`. agentboard keeps a small local ledger of how you use agents, built from the logs Claude Code and Codex already write: agent-hours per day, when in the week you work, top projects, models and tools, and cache hit rate. It keeps only counts; no prompt text is stored.
+
+**Plan limits** show in the board's top bar and in the menu:
+
+- **Codex**: read automatically from Codex's own logs.
+- **Claude Code**: Claude Code shares your 5-hour and weekly limits only with its status line, so point the status line at agentboard once:
+
+  ```bash
+  agentboard statusline --install
   ```
 
-  If you already have a status line, keep it: `agentboard statusline --then '<your command>'`.
+  It backs up `~/.claude/settings.json`, and keeps your existing status line if you have one. Limits refresh whenever Claude Code renders its status line in a terminal session.
 
 ## Other machines
 
-agentboard watches remote hosts over plain SSH. There's no daemon, no open port and no extra auth. It uses your `~/.ssh/config` and agent.
+agentboard watches remote hosts over SSH, with no daemon or open port. Install agentboard on the server, then:
 
-1. Install `agentboard` on the server (on its `PATH`, or pass `--remote-cmd /path/to/agentboard`).
-2. Add the host with `--host user@server`, or list hosts one per line in `~/.config/agentboard/hosts`.
+```bash
+agentboard --host dev@gpu-box --host build-01
+```
 
-Each host keeps one SSH connection open and streams `agentboard --stream` snapshots over it. If the connection drops, it reconnects with backoff. Unreachable hosts turn red in the top bar.
+Or list hosts, one per line, in `~/.config/agentboard/hosts`. Each host keeps one SSH connection streaming `agentboard --stream`, reconnects on its own, and shows up as a chip in the top bar (green when live, red with the error when it isn't). Key-based SSH login is required; if `agentboard` isn't on the remote's PATH, pass `--remote-cmd /path/to/agentboard`.
 
-## Where the data comes from
+## How status works
 
-| Provider | Source | Status |
+| | Source | States |
 |---|---|---|
-| Claude Code | `claude agents --json`, `~/.claude/sessions/<pid>.json`, tail of the session transcript (latest tool, prompt, context size) | working / idle / blocked |
-| Codex | shared app-server daemon via `codex app-server proxy`, read-only `thread/list` | working / needs you / idle / error |
-| Codex | live `codex` processes and the rollout JSONL they hold open | working / idle / error |
+| Claude Code | `claude agents --json`, `~/.claude/sessions/*.json`, the session transcript | working, needs you (with the reason), idle, blocked |
+| Codex | live `codex` processes and their session logs; the Codex app-server when it's running | working, needs you, idle, error |
 
-agentboard is read-only. It never sends prompts, approvals or mutating RPCs. It never reads `auth.json` or Claude's `.key` files, and it doesn't connect to Claude's messaging sockets. Prompt and tool snippets are capped at about 120 characters.
+Sessions idle or blocked for more than a day are tucked away (`s` shows them).
+
+## Terminals and logos
+
+Provider logos are drawn as real images in terminals that speak the kitty graphics protocol (Ghostty, cmux, kitty, WezTerm), and as colored ✻ Claude / >_ Codex marks elsewhere. `--images off` turns them off. Logos come from the Claude and ChatGPT apps if they're installed; otherwise Claude's mark is fetched once from Simple Icons and cached (`--no-fetch` to never touch the network).
+
+## Privacy
+
+- Local and read-only. No telemetry, no accounts.
+- Reads session metadata and transcript tails on your machine; never your auth files or tokens.
+- The usage ledger (`~/.local/share/agentboard/usage/`) stores counts only.
+- Remote hosts use your own SSH, and send the same metadata back.
+
+## Reference
+
+```text
+agentboard [flags]
+  --demo                 synthetic fleet
+  --host user@host       also watch a machine over SSH (repeatable)
+  --view agents|usage    screen to open on
+  --provider claude,codex
+  --cwd ~/code/project   only sessions under a directory
+  --once | --json        print once and exit
+  --images auto|kitty|blocks|off
+agentboard usage [--days 7|30] [--json]
+agentboard statusline [--install] [--then '<your status line>']
+```
+
+## Building
+
+```bash
+go build ./cmd/agentboard     # the CLI
+macos/build.sh --install      # the menu bar app (needs the Xcode command line tools)
+scripts/release.sh 0.1.0      # release artifacts
+```
+
+`launch/` has the scripts that make the launch film: an original beat synthesized in Python and procedural motion design in Blender.
 
 ## License
 

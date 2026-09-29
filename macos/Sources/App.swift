@@ -23,7 +23,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var settingsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ note: Notification) {
-        UserDefaults.standard.register(defaults: ["notch": true, "notify": true, "showCount": false])
+        UserDefaults.standard.register(defaults: ["notch": true, "notify": true, "showCount": false, "showLimit": true])
         // Menu bar only, whatever Info.plist says (handy for debug builds).
         NSApp.setActivationPolicy(.accessory)
 

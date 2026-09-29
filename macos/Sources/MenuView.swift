@@ -48,7 +48,13 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         // Like native extras: dimmed when there's nothing going on.
         button.appearsDisabled = waiting + busy == 0
         let count = waiting > 0 ? waiting : busy
-        button.title = UserDefaults.standard.bool(forKey: "showCount") && count > 0 ? "\(count)" : ""
+        var parts: [String] = []
+        if UserDefaults.standard.bool(forKey: "showCount") && count > 0 { parts.append("\(count)") }
+        // The limit you're closest to, Claude first: what people actually watch.
+        if UserDefaults.standard.bool(forKey: "showLimit"), let l = tightestLimit {
+            parts.append("\(Int(l.used_percent.rounded()))%")
+        }
+        button.title = parts.isEmpty ? "" : " " + parts.joined(separator: " · ")
         button.toolTip = summary
         button.setAccessibilityLabel("AgentBoard: \(summary)")
     }
@@ -76,6 +82,12 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         }
         img.isTemplate = true
         return img
+    }
+
+    private var tightestLimit: RateLimit? {
+        let all = board.limits.map(\.value)
+        let claude = all.filter { $0.provider == "claude" }
+        return (claude.isEmpty ? all : claude).max { $0.used_percent < $1.used_percent }
     }
 
     private var summary: String {
@@ -222,7 +234,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         for (_, l) in board.limits {
             let i = NSMenuItem(title: "\(Provider.name(l.provider)) \(windowName(l)) limit", action: nil, keyEquivalent: "")
             i.isEnabled = true
-            i.image = gaugeImage(percent: l.used_percent)
+            i.image = gaugeImage(percent: l.used_percent, provider: l.provider)
             i.badge = NSMenuItemBadge(string: "\(Int(l.used_percent.rounded()))%")
             if let r = l.resets_at {
                 i.setSubtitle("Resets " + r.formatted(.dateTime.weekday(.abbreviated).hour().minute()))
@@ -283,9 +295,12 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     }
 
     /// A small ring gauge, drawn the way macOS draws capacity indicators.
-    private func gaugeImage(percent: Double) -> NSImage {
-        let size = NSSize(width: 16, height: 16)
+    private func gaugeImage(percent: Double, provider: String) -> NSImage {
+        let size = NSSize(width: 22, height: 22)
+        let icon = Provider.icon(provider)
         return NSImage(size: size, flipped: false) { r in
+            // The provider's real app icon inside the usage ring.
+            icon?.draw(in: r.insetBy(dx: 5, dy: 5))
             let rect = r.insetBy(dx: 1.5, dy: 1.5)
             let track = NSBezierPath(ovalIn: rect)
             track.lineWidth = 2.5
@@ -322,6 +337,7 @@ struct SettingsView: View {
     @AppStorage("notch") private var notch = true
     @AppStorage("notify") private var notify = true
     @AppStorage("showCount") private var showCount = false
+    @AppStorage("showLimit") private var showLimit = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -330,6 +346,7 @@ struct SettingsView: View {
                 Toggle("Show agents around the notch", isOn: $notch)
                 Toggle("Notify when an agent needs you or finishes", isOn: $notify)
                 Toggle("Show agent count in the menu bar", isOn: $showCount)
+                Toggle("Show plan usage in the menu bar", isOn: $showLimit)
             }
             Section {
                 Toggle("Launch at login", isOn: $launchAtLogin)

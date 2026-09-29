@@ -38,6 +38,15 @@ func runStatusline(args []string) {
 	if json.Unmarshal(in, &st) == nil {
 		_ = usage.Open(usage.DefaultDir()).SaveClaudeLimits(st, time.Now())
 	}
+	// Keep the last raw rate_limits block (and nothing else from the input)
+	// so it's easy to see what Claude Code actually reported.
+	var raw struct {
+		RateLimits json.RawMessage `json:"rate_limits"`
+	}
+	if json.Unmarshal(in, &raw) == nil {
+		_ = os.WriteFile(filepath.Join(usage.DefaultDir(), "claude-rate-limits-raw.json"),
+			[]byte(fmt.Sprintf("{\"at\":%q,\"rate_limits\":%s}\n", time.Now().Format(time.RFC3339), orNull(raw.RateLimits))), 0o644)
+	}
 
 	if *then != "" {
 		cmd := exec.Command("/bin/sh", "-c", *then)
@@ -110,6 +119,13 @@ func installStatusline() error {
 	fmt.Println("statusLine →", cmd)
 	fmt.Println("Claude plan limits show up after your next Claude Code reply (Pro/Max plans).")
 	return nil
+}
+
+func orNull(b json.RawMessage) string {
+	if len(b) == 0 {
+		return "null"
+	}
+	return string(b)
 }
 
 func shellQuote(s string) string {
