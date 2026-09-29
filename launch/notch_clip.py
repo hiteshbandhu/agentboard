@@ -349,6 +349,108 @@ for i, (hh, c) in enumerate(zip([0.14, 0.24, 0.18], ["#2dd4bf", "#4ade80", "#a3e
 word, wf = label("word", "agentboard", 0.3, srgb("#f4f4f6"), "LEFT", TELEGRAF)
 key(word, wf, 0, LAST, lambda f: {"loc": (2.97, lock_y - 0.035, 0), "alpha": out_expo(prog(f, 30, 16)) * lock_vis(f)})
 
+
+# ---- posters: one frozen frame, re-framed per aspect ratio.
+if "--poster" in argv:
+    kind = argv[argv.index("--poster") + 1]
+    W, H, frame = {"h": (1920, 1080, 100), "v": (1080, 1350, 180), "story": (1080, 1920, 180)}[kind]
+    scene.render.resolution_x, scene.render.resolution_y = W, H
+    scene.render.use_motion_blur = False
+    scene.eevee.taa_render_samples = 128
+    scene.frame_set(frame)
+    for n in ("lb0", "lb1", "lb2", "word"):
+        bpy.data.objects[n].hide_render = True
+
+    # Frame the shot: bezel at the very top, width fits the island.
+    cam.animation_data_clear()
+    if kind == "h":
+        z = 10.0
+        vis_w, vis_h = 0.9 * z, 0.9 * z * H / W
+    else:
+        target_w = 9.6 if kind == "v" else 8.8
+        z = target_w / (0.9 * W / H)
+        vis_w, vis_h = target_w, 0.9 * z
+    cam_y = TOP + 0.42 - vis_h / 2
+    cam.location = (0, cam_y, z)
+    bottom = cam_y - vis_h / 2
+
+    # Fill tall frames: longer desktop, more glow further down.
+    desk.scale = (1, 4, 1)
+    desk.location = (0, TOP - 18 + 0.5, -1)
+    for i, (c, x, y, sz, k) in enumerate([("#8b6cff", -4.0, -7.0, 11, 0.7), ("#2dd4bf", 4.5, -10.5, 12, 0.6),
+                                            ("#e0845f", -1.5, -13.5, 10, 0.55), ("#8b6cff", 3.0, -16.0, 10, 0.5)]):
+        if kind != "h":
+            g = glow(f"pglow{i}", srgb(c), sz, k)
+            g.location = (x, y, -0.9)
+
+    # Content below the island.
+    island_bottom = TOP - (1.55 if kind == "h" else 4.25)
+    space_top, space_bot = island_bottom - 0.3, bottom + 0.35
+    mid = (space_top + space_bot) / 2
+    big = {"h": 1.0, "v": 1.15, "story": 1.05}[kind]
+    lockup_y = mid + {"h": 0.35, "v": 1.0, "story": 0.3}[kind]
+
+    def rbar(name, w, h, color):
+        bpy.ops.mesh.primitive_cube_add(size=1)
+        o = bpy.context.active_object
+        o.name = name
+        for v in o.data.vertices:
+            v.co.x *= w
+            v.co.y *= h
+            v.co.z *= 0.4
+        bev = o.modifiers.new("r", "BEVEL")
+        bev.width = w * 0.49
+        bev.segments = 12
+        bev.use_clamp_overlap = False
+        m, _ = mat(name, color, strength=1.15)
+        o.data.materials.append(m)
+        return o
+
+    bw, gap = 0.3 * big, 0.14 * big
+    word, _ = label("pword", "agentboard", 1.15 * big, srgb("#f4f4f6"), "LEFT", TELEGRAF)
+    bpy.context.view_layer.update()
+    total = 3 * bw + 2 * gap + 0.38 * big + word.dimensions.x
+    x0 = -total / 2
+    base = lockup_y - 0.52 * big
+    for i, (hh, c) in enumerate(zip([0.62, 1.06, 0.8], ["#2dd4bf", "#4ade80", "#a3e635"])):
+        b = rbar(f"pbar{i}", bw, hh * big, srgb(c))
+        b.location = (x0 + bw / 2 + i * (bw + gap), base + hh * big / 2, 0)
+    word.location = (x0 + 3 * bw + 2 * gap + 0.38 * big, base + 0.42 * big, 0)
+
+    tag, _ = label("ptag", "Your coding agents, right in the notch.", 0.36 * big, srgb("#f4f4f6"), "CENTER",
+                   bpy.data.fonts.load(os.path.expanduser("~/Library/Fonts/PPTelegraf-Regular.otf")))
+    tag.location = (0, lockup_y - 1.05 * big, 0)
+    sub, _ = label("psub", "Claude Code  ·  Codex  ·  macOS  ·  open source", 0.21 * big, srgb("#c9cbe0"), "CENTER", SF)
+    sub.location = (0, lockup_y - 1.6 * big, 0)
+
+    if kind != "h":
+        pm, _ = mat("ppill", srgb("#0d0f18"))
+        pm_nodes = pm.node_tree.nodes
+        for n in pm_nodes:
+            if n.type == "VALUE":
+                n.outputs[0].default_value = 0.72
+        bpy.ops.mesh.primitive_plane_add(size=1)
+        pill = bpy.context.active_object
+        for v in pill.data.vertices:
+            v.co.x *= 5.4
+            v.co.y *= 0.64
+        pb = pill.modifiers.new("r", "BEVEL")
+        pb.width = 0.31
+        pb.segments = 12
+        pb.affect = "VERTICES"
+        pill.data.materials.append(pm)
+        py = lockup_y - 2.55 * big
+        pill.location = (0, py, -0.05)
+        mono = bpy.data.fonts.load(os.path.expanduser("~/Library/Fonts/JetBrainsMono-Bold.ttf"))
+        cmd, _ = label("pcmd", "$  brew install agentboard", 0.3, srgb("#f4f4f6"), "CENTER", mono)
+        cmd.location = (0, py, 0)
+
+    out_path = os.path.join(HERE, "out", f"agentboard-poster-{kind}.png")
+    scene.render.filepath = out_path
+    bpy.ops.render.render(write_still=True)
+    print("poster:", out_path)
+    raise SystemExit
+
 bpy.ops.wm.save_as_mainfile(filepath=os.path.join(HERE, "out", "notch_clip.blend"))
 
 if "--stills" in argv:
