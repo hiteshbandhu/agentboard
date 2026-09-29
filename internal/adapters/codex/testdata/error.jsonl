@@ -1,0 +1,3 @@
+{"timestamp":"2026-09-27T19:24:13.764Z","type":"session_meta","payload":{"id":"abc","cwd":"/tmp/proj"}}
+{"timestamp":"2026-09-27T19:24:14Z","type":"event_msg","payload":{"type":"task_started","turn_id":"t1"}}
+{"timestamp":"2026-09-27T19:24:19Z","type":"event_msg","payload":{"type":"task_complete","turn_id":"t1","error":{"message":"token revoked"}}}

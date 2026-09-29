@@ -1,0 +1,5 @@
+{"timestamp":"2026-09-27T19:24:13.764Z","type":"session_meta","payload":{"id":"01a0e453-33fd-7243-8bad-c266a6459f98","timestamp":"2026-09-27T19:24:13.280Z","cwd":"/tmp/proj","originator":"codex-tui"}}
+{"timestamp":"2026-09-27T19:24:14Z","type":"turn_context","payload":{"turn_id":"t1","cwd":"/tmp/proj","model":"gpt-6-astra"}}
+{"timestamp":"2026-09-27T19:24:14Z","type":"event_msg","payload":{"type":"task_started","turn_id":"t1"}}
+{"timestamp":"2026-09-27T19:24:15Z","type":"event_msg","payload":{"type":"item_completed","item":{"type":"UserMessage","content":[{"type":"text","text":"fix the\nflaky test"}]}}}
+{"timestamp":"2026-09-27T19:24:16Z","type":"response_item","payload":{"type":"custom_tool_call","name":"apply_patch"}}

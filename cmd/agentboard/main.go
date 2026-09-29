@@ -1,0 +1,243 @@
+// agentboard: a read-only board of every coding agent running on this machine
+// and, over SSH, on your other machines.
+package main
+
+import (
+	"bufio"
+	"context"
+	"encoding/json"
+	"flag"
+	"fmt"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"strings"
+	"text/tabwriter"
+	"time"
+
+	"github.com/hiteshbandhu/agentboard/internal/adapters/claude"
+	"github.com/hiteshbandhu/agentboard/internal/adapters/codex"
+	"github.com/hiteshbandhu/agentboard/internal/adapters/demo"
+	"github.com/hiteshbandhu/agentboard/internal/adapters/remote"
+	"github.com/hiteshbandhu/agentboard/internal/hub"
+	"github.com/hiteshbandhu/agentboard/internal/model"
+	"github.com/hiteshbandhu/agentboard/internal/termimg"
+	"github.com/hiteshbandhu/agentboard/internal/tui"
+)
+
+var version = "dev"
+
+type multiFlag []string
+
+func (m *multiFlag) String() string     { return strings.Join(*m, ",") }
+func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
+
+func main() {
+	if len(os.Args) > 1 && os.Args[1] == "usage" {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer stop()
+		runUsage(ctx, os.Args[2:])
+		return
+	}
+	var (
+		asJSON    = flag.Bool("json", false, "print a JSON snapshot and exit")
+		once      = flag.Bool("once", false, "print a table and exit")
+		stream    = flag.Bool("stream", false, "print a JSON snapshot per line every --watch (used over ssh)")
+		watch     = flag.Duration("watch", 2*time.Second, "refresh interval")
+		provider  = flag.String("provider", "", "comma-separated providers (claude,codex)")
+		cwd       = flag.String("cwd", "", "only sessions under this directory")
+		remoteCmd = flag.String("remote-cmd", "agentboard", "agentboard command on remote hosts")
+		noLocal   = flag.Bool("no-local", false, "only show remote hosts")
+		render    = flag.String("render", "", "debug: render one TUI frame at WxH and exit")
+		demoMode  = flag.Bool("demo", false, "show a synthetic fleet (for screenshots and trying it out)")
+		images    = flag.String("images", "auto", "provider logos: auto, kitty, blocks, off")
+		noFetch   = flag.Bool("no-fetch", false, "never download logos from the CDN")
+		view      = flag.String("view", "agents", "screen to open on: agents or usage")
+		noUsage   = flag.Bool("no-usage", false, "don't read agent logs for usage stats")
+		showVer   = flag.Bool("version", false, "print version")
+		hosts     multiFlag
+	)
+	flag.Var(&hosts, "host", "ssh destination to also watch (repeatable); also read from ~/.config/agentboard/hosts")
+	flag.Parse()
+	if *showVer {
+		fmt.Println("agentboard", version)
+		return
+	}
+
+	all := map[string]model.Adapter{
+		"claude": claude.Adapter{},
+		"codex":  codex.Adapter{},
+	}
+	order := []string{"claude", "codex"}
+	providers := order
+	if *provider != "" {
+		providers = nil
+		for _, p := range strings.Split(*provider, ",") {
+			p = strings.TrimSpace(p)
+			if _, ok := all[p]; !ok {
+				fmt.Fprintf(os.Stderr, "agentboard: unknown provider %q (have: %s)\n", p, strings.Join(order, ", "))
+				os.Exit(2)
+			}
+			providers = append(providers, p)
+		}
+	}
+	var adapters []model.Adapter
+	if !*noLocal {
+		for _, p := range providers {
+			adapters = append(adapters, all[p])
+		}
+	}
+	// Remote hosts never apply to --stream: the far side reports itself only.
+	if !*stream {
+		live := !*asJSON && !*once
+		for _, h := range append(readHostsFile(), hosts...) {
+			adapters = append(adapters, remote.New(h, *remoteCmd, *watch, live))
+		}
+	}
+
+	if *demoMode {
+		adapters = []model.Adapter{&demo.Adapter{}}
+	}
+
+	dir := *cwd
+	if strings.HasPrefix(dir, "~") {
+		home, _ := os.UserHomeDir()
+		dir = home + dir[1:]
+	}
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+	h := hub.New(*watch, adapters...)
+
+	switch {
+	case *stream:
+		runStream(ctx, h, *watch)
+	case *asJSON || *once:
+		snap := h.Once(ctx)
+		snap.Sessions = filterCWD(snap.Sessions, dir)
+		if *asJSON {
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			_ = enc.Encode(snap)
+		} else {
+			printTable(snap)
+		}
+	case *render != "":
+		var w, hh int
+		if _, err := fmt.Sscanf(*render, "%dx%d", &w, &hh); err != nil {
+			fmt.Fprintln(os.Stderr, "agentboard: --render wants WxH")
+			os.Exit(2)
+		}
+		if *demoMode {
+			for range 400 { // build up history instantly
+				h.Once(ctx)
+			}
+		} else {
+			h.Once(ctx)
+			time.Sleep(*watch) // a second sample, so timelines and feed have data
+			h.Once(ctx)
+		}
+		mode := termimg.Blocks // screenshots can't show kitty placements
+		if *images != "auto" {
+			mode = termimg.Detect(*images)
+		}
+		fmt.Print(tui.Render(h, tui.Options{CWD: dir, Images: mode, FetchIcon: !*noFetch, Usage: !*noUsage, StartView: *view}, w, hh))
+	default:
+		var cycle []string
+		if *provider != "" {
+			cycle = providers
+		}
+		opt := tui.Options{Providers: cycle, CWD: dir, Images: termimg.Detect(*images), FetchIcon: !*noFetch,
+			Usage: !*noUsage, StartView: *view}
+		if err := tui.Run(ctx, h, opt); err != nil {
+			fmt.Fprintln(os.Stderr, "agentboard:", err)
+			os.Exit(1)
+		}
+	}
+}
+
+func runStream(ctx context.Context, h *hub.Hub, every time.Duration) {
+	enc := json.NewEncoder(os.Stdout)
+	emit := func() bool { return enc.Encode(h.Snapshot()) == nil }
+	h.Once(ctx)
+	if !emit() {
+		return
+	}
+	h.Run(ctx)
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if !emit() {
+				return // ssh went away
+			}
+		}
+	}
+}
+
+// readHostsFile reads ~/.config/agentboard/hosts: one ssh destination per
+// line, # comments allowed.
+func readHostsFile() []string {
+	dir := os.Getenv("XDG_CONFIG_HOME")
+	if dir == "" {
+		home, _ := os.UserHomeDir()
+		dir = filepath.Join(home, ".config")
+	}
+	f, err := os.Open(filepath.Join(dir, "agentboard", "hosts"))
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	var out []string
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if i := strings.IndexByte(line, '#'); i >= 0 {
+			line = strings.TrimSpace(line[:i])
+		}
+		if line != "" {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+func filterCWD(in []model.Session, dir string) []model.Session {
+	if dir == "" {
+		return in
+	}
+	var out []model.Session
+	for _, s := range in {
+		if strings.HasPrefix(s.CWD, dir) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func printTable(snap model.Snapshot) {
+	w := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
+	fmt.Fprintln(w, "HOST\tPROVIDER\tSTATUS\tTITLE\tCWD\tPID\tUPDATED")
+	for _, s := range snap.Sessions {
+		pid := "—"
+		if s.PID > 0 {
+			pid = fmt.Sprint(s.PID)
+		}
+		upd := "—"
+		if t := s.LastSeen(); !t.IsZero() {
+			upd = time.Since(t).Round(time.Second).String()
+		}
+		host := s.Host
+		if host == "" {
+			host = "local"
+		}
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", host, s.Provider, s.Status, model.Snip(s.Title, 40), s.CWD, pid, upd)
+	}
+	w.Flush()
+	for _, e := range snap.Errors {
+		fmt.Fprintf(os.Stderr, "! %s: %s\n", e.Provider, e.Error)
+	}
+}
