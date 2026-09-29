@@ -33,6 +33,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
 
         board.onEvent = { [weak self] e in self?.handle(e) }
         board.start()
+        if let i = CommandLine.arguments.firstIndex(of: "--snapshot"), i + 1 < CommandLine.arguments.count {
+            SnapshotMode.run(board: board, dir: CommandLine.arguments[i + 1])
+            return
+        }
         status = StatusMenu(board: board)
         status?.onSettings = { [weak self] in self?.showSettings() }
         notch.start(board: board)

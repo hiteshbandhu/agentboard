@@ -1,2 +1,4 @@
 bin/
 macos/build/
+launch/out/
+.DS_Store

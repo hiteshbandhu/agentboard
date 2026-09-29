@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -62,6 +63,9 @@ func Render(h *hub.Hub, opt Options, w, ht int) string {
 	m := newModel(h, opt)
 	m.w, m.h = w, ht
 	m.frame = 7
+	if v, err := strconv.Atoi(os.Getenv("AGENTBOARD_FRAME")); err == nil {
+		m.frame = v // debug: pick the animation frame for screenshots
+	}
 	if opt.Images != termimg.Off {
 		lm := loadLogos(context.Background(), opt)
 		m.logos = lm.logos
@@ -150,6 +154,9 @@ func newModel(h *hub.Hub, opt Options) *uiModel {
 	home, _ := os.UserHomeDir()
 	hn, _ := os.Hostname()
 	hn = strings.ToLower(strings.Split(hn, ".")[0])
+	if v := os.Getenv("AGENTBOARD_HOSTNAME"); v != "" {
+		hn = v // debug: screenshots without the real machine name
+	}
 	f := []string{""}
 	if len(opt.Providers) > 0 {
 		f = append(f, opt.Providers...)

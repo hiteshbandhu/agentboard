@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -135,7 +136,11 @@ func main() {
 			os.Exit(2)
 		}
 		if *demoMode {
-			for range 400 { // build up history instantly
+			ticks := 400
+			if v, err := strconv.Atoi(os.Getenv("AGENTBOARD_DEMO_TICKS")); err == nil && v > 0 {
+				ticks = v
+			}
+			for range ticks { // build up history instantly
 				h.Once(ctx)
 			}
 		} else {
