@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -22,7 +23,15 @@ import (
 func runStatusline(args []string) {
 	fs := flag.NewFlagSet("statusline", flag.ExitOnError)
 	then := fs.String("then", "", "run this status line command too, and print its output instead")
+	install := fs.Bool("install", false, "set agentboard as Claude Code's status line in ~/.claude/settings.json")
 	_ = fs.Parse(args)
+	if *install {
+		if err := installStatusline(); err != nil {
+			fmt.Fprintln(os.Stderr, "agentboard:", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	in, _ := io.ReadAll(io.LimitReader(os.Stdin, 4<<20))
 	var st usage.ClaudeStatus
@@ -38,6 +47,76 @@ func runStatusline(args []string) {
 		return
 	}
 	fmt.Println(ownStatusline(in))
+}
+
+// installStatusline points Claude Code's statusLine at agentboard, keeping
+// any existing status line by chaining it with --then. The old settings
+// file is backed up next to itself first.
+func installStatusline() error {
+	home, _ := os.UserHomeDir()
+	path := filepath.Join(home, ".claude", "settings.json")
+	settings := map[string]any{}
+	raw, err := os.ReadFile(path)
+	if err == nil {
+		if err := json.Unmarshal(raw, &settings); err != nil {
+			return fmt.Errorf("%s isn't valid JSON, not touching it: %w", path, err)
+		}
+		backup := path + ".bak-agentboard-" + time.Now().Format("20060102-150405")
+		if err := os.WriteFile(backup, raw, 0o600); err != nil {
+			return err
+		}
+		fmt.Println("backed up", backup)
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	if resolved, err := filepath.EvalSymlinks(self); err == nil {
+		self = resolved
+	}
+	// Prefer the stable Homebrew link over a versioned Cellar path.
+	for _, p := range []string{"/opt/homebrew/bin/agentboard", "/usr/local/bin/agentboard"} {
+		if r, err := filepath.EvalSymlinks(p); err == nil && r == self {
+			self = p
+		}
+	}
+	cmd := shellQuote(self) + " statusline"
+
+	if sl, ok := settings["statusLine"].(map[string]any); ok {
+		existing, _ := sl["command"].(string)
+		switch {
+		case strings.Contains(existing, "agentboard") && strings.Contains(existing, "statusline"):
+			fmt.Println("already installed:", existing)
+			return nil
+		case existing != "":
+			cmd += " --then " + shellQuote(existing)
+			fmt.Println("keeping your status line; agentboard runs it via --then")
+		}
+	}
+	settings["statusLine"] = map[string]any{"type": "command", "command": cmd}
+	out, err := json.MarshalIndent(settings, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, append(out, '\n'), 0o600); err != nil {
+		return err
+	}
+	fmt.Println("statusLine →", cmd)
+	fmt.Println("Claude plan limits show up after your next Claude Code reply (Pro/Max plans).")
+	return nil
+}
+
+func shellQuote(s string) string {
+	if !strings.ContainsAny(s, " '\"$`\\&|;<>()*?[]#~") {
+		return s
+	}
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 func ownStatusline(in []byte) string {

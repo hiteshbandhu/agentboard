@@ -4,13 +4,24 @@ A live status wall for every coding agent you're running: Claude Code and Codex,
 
 ![agentboard --demo](docs/demo.png)
 
+## Install
+
 ```bash
-go build -o bin/agentboard ./cmd/agentboard
-bin/agentboard                 # the wall
-bin/agentboard --demo          # synthetic fleet, to try it or take screenshots
-bin/agentboard --host dev@gpu-box --host build-01
-bin/agentboard --once          # table, exit
-bin/agentboard --json          # snapshot for scripts
+brew install hiteshbandhu/tap/agentboard          # the terminal board (macOS, Linux)
+brew install --cask hiteshbandhu/tap/agentboard-app  # menu bar + notch app (macOS 14+)
+```
+
+Or grab a binary from [Releases](https://github.com/hiteshbandhu/agentboard/releases), or build it yourself with `go build ./cmd/agentboard`.
+
+## Use
+
+```bash
+agentboard                 # the wall
+agentboard --demo          # synthetic fleet, to try it or take screenshots
+agentboard --host dev@gpu-box --host build-01
+agentboard usage           # how much you use agents
+agentboard --once          # table, exit
+agentboard --json          # snapshot for scripts
 ```
 
 Keys: arrows/hjkl move · `f` cycle provider · `s` show stale sessions · `q` quit.
@@ -34,9 +45,9 @@ Pass `--no-fetch` to never touch the network, or `--images blocks|kitty|off` to 
 
 ## Menu bar and notch (macOS)
 
-```bash
-macos/build.sh --install   # builds AgentBoard.app into ~/Applications and launches it
-```
+![the notch](docs/notch.png)
+
+Install the app with the cask above, or build it: `macos/build.sh --install`.
 
 A menu-bar app built on the same data (it runs the bundled `agentboard --stream`):
 
@@ -73,3 +84,7 @@ Each host keeps one SSH connection open and streams `agentboard --stream` snapsh
 | Codex | live `codex` processes and the rollout JSONL they hold open | working / idle / error |
 
 agentboard is read-only. It never sends prompts, approvals or mutating RPCs. It never reads `auth.json` or Claude's `.key` files, and it doesn't connect to Claude's messaging sockets. Prompt and tool snippets are capped at about 120 characters.
+
+## License
+
+MIT
