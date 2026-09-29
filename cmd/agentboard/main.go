@@ -33,6 +33,10 @@ func (m *multiFlag) String() string     { return strings.Join(*m, ",") }
 func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
 
 func main() {
+	if len(os.Args) > 1 && os.Args[1] == "statusline" {
+		runStatusline(os.Args[2:])
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "usage" {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer stop()
@@ -53,6 +57,7 @@ func main() {
 		images    = flag.String("images", "auto", "provider logos: auto, kitty, blocks, off")
 		noFetch   = flag.Bool("no-fetch", false, "never download logos from the CDN")
 		view      = flag.String("view", "agents", "screen to open on: agents or usage")
+		withHosts = flag.Bool("with-hosts", false, "with --stream: include remote hosts (for the menu bar app)")
 		noUsage   = flag.Bool("no-usage", false, "don't read agent logs for usage stats")
 		showVer   = flag.Bool("version", false, "print version")
 		hosts     multiFlag
@@ -87,9 +92,10 @@ func main() {
 			adapters = append(adapters, all[p])
 		}
 	}
-	// Remote hosts never apply to --stream: the far side reports itself only.
-	if !*stream {
-		live := !*asJSON && !*once
+	// Remote hosts don't apply to a plain --stream (that's what a remote
+	// runs, and it should report only itself); the menu bar asks for them.
+	if !*stream || *withHosts {
+		live := !*asJSON && !*once || *stream
 		for _, h := range append(readHostsFile(), hosts...) {
 			adapters = append(adapters, remote.New(h, *remoteCmd, *watch, live))
 		}

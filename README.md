@@ -32,6 +32,29 @@ agentboard ships no brand artwork. It finds logos at runtime, in this order:
 
 Pass `--no-fetch` to never touch the network, or `--images blocks|kitty|off` to override detection.
 
+## Menu bar and notch (macOS)
+
+```bash
+macos/build.sh --install   # builds AgentBoard.app into ~/Applications and launches it
+```
+
+A menu-bar app built on the same data (it runs the bundled `agentboard --stream`):
+
+- **Menu bar**: counts of working agents and agents that need you; the dropdown lists every agent with its real app icon, today's usage and plan-limit gauges.
+- **Notch**: on MacBooks with a notch, small "ears" beside it show working/needs-you counts. It drops down for a few seconds when an agent needs you or finishes, and hovering over the notch expands it into a list. It never takes clicks.
+- **Alerts**: a macOS notification when an agent needs you, or finishes a turn longer than a minute.
+
+## Plan limits
+
+- **Codex**: read from Codex's own logs automatically.
+- **Claude Code**: Claude Code only gives its 5-hour and 7-day limits to status-line scripts. Set agentboard as your status line to capture them:
+
+  ```json
+  { "statusLine": { "type": "command", "command": "agentboard statusline" } }
+  ```
+
+  If you already have a status line, keep it: `agentboard statusline --then '<your command>'`.
+
 ## Other machines
 
 agentboard watches remote hosts over plain SSH. There's no daemon, no open port and no extra auth. It uses your `~/.ssh/config` and agent.

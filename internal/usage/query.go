@@ -102,7 +102,14 @@ func (l *Ledger) rateLimits() map[string]RateLimit {
 	if b, err := os.ReadFile(filepath.Join(l.Dir, "state.json")); err == nil {
 		_ = jsonUnmarshal(b, st)
 	}
-	return st.RateLimits
+	out := map[string]RateLimit{}
+	for k, v := range st.RateLimits {
+		out[k] = v
+	}
+	for k, v := range l.claudeLimits() {
+		out[k] = v
+	}
+	return out
 }
 
 func bump(m map[string]*Named, name, prov string, c Counters) {

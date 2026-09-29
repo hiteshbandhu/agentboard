@@ -1,0 +1,471 @@
+import AppKit
+import Foundation
+
+// MARK: - Snapshot types (mirror internal/model and internal/usage)
+
+struct Session: Decodable, Hashable {
+    var host: String?
+    var provider: String
+    var id: String
+    var pid: Int?
+    var title: String
+    var cwd: String
+    var status: String
+    var kind: String?
+    var model: String?
+    var last: String?
+    var prompt: String?
+    var status_since: Date?
+    var updated_at: Date?
+    var started_at: Date?
+    var context_tokens: Int?
+
+    var key: String { "\(host ?? "")|\(provider)|\(id.isEmpty ? "pid:\(pid ?? 0)" : id)" }
+    var project: String { (cwd as NSString).lastPathComponent }
+    var name: String { title.isEmpty ? project : title }
+    var lastSeen: Date? { updated_at ?? started_at }
+
+    var needsYou: Bool { status == "waiting" || status == "error" }
+    var working: Bool { status == "busy" }
+    /// Parked and quiet for a day: hidden, like the terminal board does.
+    var stale: Bool {
+        guard !needsYou, !working, let seen = lastSeen else { return false }
+        return Date().timeIntervalSince(seen) > 24 * 3600
+    }
+}
+
+struct AdapterError: Decodable, Hashable {
+    var provider: String
+    var error: String
+}
+
+struct Snapshot: Decodable {
+    var generated_at: Date
+    var sessions: [Session]
+    var adapter_errors: [AdapterError]?
+}
+
+struct Tokens: Decodable {
+    var `in`: Int64?
+    var cache_read: Int64?
+    var cache_write: Int64?
+    var out: Int64?
+    var total: Int64 { (`in` ?? 0) + (cache_read ?? 0) + (cache_write ?? 0) + (out ?? 0) }
+}
+
+struct Counters: Decodable {
+    var tokens: Tokens?
+    var prompts: Int64?
+    var tools: Int64?
+    var active_s: Double?
+}
+
+struct RateLimit: Decodable {
+    var provider: String
+    var used_percent: Double
+    var window_minutes: Int?
+    var resets_at: Date?
+    var observed_at: Date?
+
+    var windowLabel: String {
+        guard let m = window_minutes, m > 0 else { return "" }
+        if m % (60 * 24) == 0 { return "\(m / (60 * 24))d" }
+        if m % 60 == 0 { return "\(m / 60)h" }
+        return "\(m)m"
+    }
+}
+
+struct UsageSummary: Decodable {
+    var total: Counters
+    var rate_limits: [String: RateLimit]?
+}
+
+// MARK: - Board: runs `agentboard --stream` and publishes what it says
+
+@MainActor
+final class Board: ObservableObject {
+    @Published private(set) var sessions: [Session] = []
+    @Published private(set) var errors: [AdapterError] = []
+    @Published private(set) var connected = false
+    @Published private(set) var problem: String?
+    @Published private(set) var today: Counters?
+    @Published private(set) var limits: [(key: String, value: RateLimit)] = []
+
+    /// Called for each status change worth telling the user about.
+    var onEvent: ((BoardEvent) -> Void)?
+
+    private var process: Process?
+    private var buffer = Data()
+    private var previous: [String: Session] = [:]
+    private var seededOnce = false
+    private var usageTimer: Timer?
+
+    var needsYou: [Session] { sessions.filter(\.needsYou) }
+    var working: [Session] { sessions.filter(\.working) }
+    var idle: [Session] { sessions.filter { !$0.needsYou && !$0.working && !$0.stale } }
+
+    func start() {
+        launch()
+        refreshUsage()
+        usageTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in self.refreshUsage() }
+        }
+    }
+
+    func stop() {
+        process?.terminate()
+        usageTimer?.invalidate()
+    }
+
+    // Run through the user's login shell so PATH has claude, codex and
+    // agentboard even though Finder launched us with a bare environment.
+    private func shellCommand(_ args: String) -> Process {
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
+        p.arguments = ["-lc", "exec \(Board.binary) \(args)"]
+        return p
+    }
+
+    /// The agentboard CLI: bundled next to us, or on PATH.
+    nonisolated static var binary: String {
+        if let env = ProcessInfo.processInfo.environment["AGENTBOARD_BIN"] { return env }
+        let helper = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/agentboard").path
+        if FileManager.default.isExecutableFile(atPath: helper) { return helper }
+        return "agentboard"
+    }
+
+    private func launch() {
+        let p = shellCommand("--stream --with-hosts --watch 2s")
+        let out = Pipe()
+        let err = Pipe()
+        p.standardOutput = out
+        p.standardError = err
+        out.fileHandleForReading.readabilityHandler = { [weak self] h in
+            let data = h.availableData
+            guard let self else { return }
+            Task { @MainActor in self.consume(data) }
+        }
+        p.terminationHandler = { [weak self] proc in
+            let msg = String(data: err.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8)?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let status = proc.terminationStatus
+            guard let self else { return }
+            Task { @MainActor in
+                self.connected = false
+                self.problem = (msg?.isEmpty == false) ? msg : "agentboard exited (\(status))"
+                if status == 127 {
+                    self.problem = "Can't find the agentboard command. Install it, or set AGENTBOARD_BIN."
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self.launch() }
+            }
+        }
+        do {
+            try p.run()
+            process = p
+        } catch {
+            problem = error.localizedDescription
+        }
+    }
+
+    private func consume(_ data: Data) {
+        buffer.append(data)
+        while let nl = buffer.firstIndex(of: 0x0A) {
+            let line = buffer.subdata(in: buffer.startIndex..<nl)
+            buffer.removeSubrange(buffer.startIndex...nl)
+            guard !line.isEmpty, let snap = try? Board.decoder.decode(Snapshot.self, from: line) else { continue }
+            apply(snap)
+        }
+    }
+
+    private func apply(_ snap: Snapshot) {
+        connected = true
+        problem = nil
+        errors = snap.adapter_errors ?? []
+        let order: (Session) -> Int = { $0.needsYou ? 0 : $0.working ? 1 : 2 }
+        sessions = snap.sessions.sorted {
+            if order($0) != order($1) { return order($0) < order($1) }
+            return ($0.lastSeen ?? .distantPast) > ($1.lastSeen ?? .distantPast)
+        }
+
+        // Transitions, skipping the very first snapshot so launching the app
+        // doesn't fire a notification for everything already running.
+        var next: [String: Session] = [:]
+        for s in snap.sessions {
+            next[s.key] = s
+            guard seededOnce, let old = previous[s.key], old.status != s.status else { continue }
+            if s.needsYou && !old.needsYou {
+                onEvent?(.needsYou(s))
+            } else if old.working && s.status == "idle" {
+                let busyFor = old.status_since.map { Date().timeIntervalSince($0) } ?? 0
+                onEvent?(.finished(s, after: busyFor))
+            } else if s.working && !old.working {
+                onEvent?(.started(s))
+            }
+        }
+        previous = next
+        seededOnce = true
+        let publisher = objectWillChange
+        ProjectIcon.prefetch(snap.sessions) {
+            DispatchQueue.main.async { publisher.send() }
+        }
+    }
+
+    func refreshUsage() {
+        let p = shellCommand("usage --days 1 --json")
+        let out = Pipe()
+        p.standardOutput = out
+        p.standardError = FileHandle.nullDevice
+        p.terminationHandler = { [weak self] _ in
+            let data = out.fileHandleForReading.readDataToEndOfFile()
+            let summary = try? Board.decoder.decode(UsageSummary.self, from: data)
+            guard let self else { return }
+            Task { @MainActor in
+                self.today = summary?.total
+                self.limits = (summary?.rate_limits ?? [:]).sorted { $0.key < $1.key }
+            }
+        }
+        try? p.run()
+    }
+
+    nonisolated(unsafe) static let decoder: JSONDecoder = {
+        let d = JSONDecoder()
+        let frac = ISO8601DateFormatter()
+        frac.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let plain = ISO8601DateFormatter()
+        plain.formatOptions = [.withInternetDateTime]
+        d.dateDecodingStrategy = .custom { dec in
+            let s = try dec.singleValueContainer().decode(String.self)
+            // Go writes nanoseconds; ISO8601DateFormatter wants at most millis.
+            let trimmed = s.replacingOccurrences(of: #"(\.\d{3})\d+"#, with: "$1", options: .regularExpression)
+            if let d = frac.date(from: trimmed) ?? plain.date(from: trimmed) { return d }
+            throw DecodingError.dataCorrupted(.init(codingPath: dec.codingPath, debugDescription: "bad date \(s)"))
+        }
+        return d
+    }()
+}
+
+enum BoardEvent {
+    case needsYou(Session)
+    case finished(Session, after: TimeInterval)
+    case started(Session)
+
+    var session: Session {
+        switch self {
+        case .needsYou(let s), .finished(let s, _), .started(let s): return s
+        }
+    }
+}
+
+// MARK: - Helpers shared by the views
+
+enum Provider {
+    static func name(_ p: String) -> String {
+        switch p {
+        case "claude": return "Claude"
+        case "codex": return "Codex"
+        default: return p.capitalized
+        }
+    }
+
+    static func color(_ p: String) -> NSColor {
+        switch p {
+        case "claude": return NSColor(red: 0.85, green: 0.47, blue: 0.34, alpha: 1)
+        case "codex": return NSColor(red: 0.49, green: 0.83, blue: 0.99, alpha: 1)
+        default: return .secondaryLabelColor
+        }
+    }
+
+    /// The vendor app's own icon if it's installed; nil otherwise.
+    static func icon(_ p: String) -> NSImage? {
+        if let cached = iconCache[p] { return cached }
+        let candidates: [String]
+        switch p {
+        case "claude": candidates = ["Claude.app"]
+        case "codex": candidates = ["Codex.app", "ChatGPT.app"]
+        default: candidates = []
+        }
+        let roots = ["/Applications", NSHomeDirectory() + "/Applications"]
+        for app in candidates {
+            for root in roots {
+                let path = root + "/" + app
+                if FileManager.default.fileExists(atPath: path) {
+                    let img = NSWorkspace.shared.icon(forFile: path)
+                    iconCache[p] = img
+                    return img
+                }
+            }
+        }
+        return nil
+    }
+
+    private static var iconCache: [String: NSImage] = [:]
+}
+
+func shortDuration(_ t: TimeInterval) -> String {
+    let s = max(0, Int(t))
+    if s < 60 { return "\(s)s" }
+    if s < 3600 { return "\(s / 60)m" }
+    if s < 48 * 3600 {
+        let h = s / 3600, m = (s % 3600) / 60
+        return h < 10 && m > 0 ? "\(h)h \(m)m" : "\(h)h"
+    }
+    return "\(s / 86400)d"
+}
+
+func humanTokens(_ n: Int64) -> String {
+    switch n {
+    case 1_000_000_000...: return String(format: "%.1fB", Double(n) / 1e9)
+    case 1_000_000...: return String(format: "%.1fM", Double(n) / 1e6)
+    case 1_000...: return String(format: "%.1fk", Double(n) / 1e3)
+    default: return "\(n)"
+    }
+}
+
+func hoursText(_ s: Double) -> String {
+    let h = s / 3600
+    return h >= 100 ? String(format: "%.0fh", h) : String(format: "%.1fh", h)
+}
+
+// MARK: - Project icons
+
+enum ProjectIcon {
+    private static var cache: [String: NSImage] = [:]
+
+    /// Common places a project keeps its own logo, best first.
+    private static let candidates = [
+        "icon.png", "logo.png", "favicon.png", "favicon.ico", "icon.icns", "logo.svg", "icon.svg", "favicon.svg",
+        "public/favicon.png", "public/favicon.ico", "public/icon.png", "public/logo.png", "public/favicon.svg", "public/logo.svg",
+        "assets/icon.png", "assets/logo.png", "static/favicon.png", "static/favicon.ico", "app/icon.png", "app/favicon.ico",
+        "src/app/icon.png", "src/app/favicon.ico", ".github/logo.png", "docs/logo.png",
+    ]
+
+    /// The project's own logo, or a custom Finder icon set on its folder;
+    /// nil when there's nothing more specific than a plain folder.
+    static func image(cwd: String, host: String?) -> NSImage? {
+        guard (host ?? "").isEmpty else { return nil }
+        let key = "|" + cwd
+        if let hit = cache[key] { return hit }
+        var img = logo(in: cwd)
+        if img == nil, hasCustomFolderIcon(cwd) {
+            img = NSWorkspace.shared.icon(forFile: cwd)
+        }
+        if let img { cache[key] = img }
+        return img
+    }
+
+    /// Finder stores a custom folder icon in a hidden "Icon\r" file.
+    private static func hasCustomFolderIcon(_ dir: String) -> Bool {
+        FileManager.default.fileExists(atPath: (dir as NSString).appendingPathComponent("Icon\r"))
+    }
+
+    private static var searched: Set<String> = []
+    private static let searchQueue = DispatchQueue(label: "agentboard.project-icons", qos: .utility)
+
+    /// Looks deeper (monorepos keep logos in apps/web/public) off the main
+    /// thread, once per project; calls back when something better turned up.
+    static func prefetch(_ sessions: [Session], found: @escaping @Sendable () -> Void) {
+        for s in sessions where (s.host ?? "").isEmpty {
+            let root = repoRoot(s.cwd)
+            guard !searched.contains(root) else { continue }
+            searched.insert(root)
+            let key = "|" + s.cwd
+            searchQueue.async {
+                guard let path = deepLogo(in: root), let img = NSImage(contentsOfFile: path), img.isValid else { return }
+                DispatchQueue.main.async {
+                    cache[key] = img
+                    found()
+                }
+            }
+        }
+    }
+
+    private static func repoRoot(_ dir: String) -> String {
+        var root = dir
+        for marker in ["/.claude/worktrees/", "/.kandy/worktrees/", "/.worktrees/"] {
+            if let r = root.range(of: marker) { root = String(root[..<r.lowerBound]) }
+        }
+        return root
+    }
+
+    private static let skip: Set<String> = ["node_modules", ".git", ".next", "dist", "build", "out", "target", "vendor", ".venv", "venv", "Pods", "DerivedData", ".claude", ".kandy", "coverage"]
+
+    private static func deepLogo(in root: String) -> String? {
+        let fm = FileManager.default
+        var best: (rank: Int, depth: Int, path: String)?
+        func rank(_ name: String) -> Int? {
+            let n = name.lowercased()
+            guard n.hasPrefix("favicon") || n.hasPrefix("icon") || n.hasPrefix("logo") || n.hasPrefix("apple-touch-icon") else { return nil }
+            if n.hasSuffix(".icns") { return 0 }
+            if n.hasSuffix(".png") { return n.hasPrefix("apple-touch-icon") ? 1 : 2 }
+            if n.hasSuffix(".svg") { return 3 }
+            if n.hasSuffix(".ico") { return 4 }
+            return nil
+        }
+        func walk(_ dir: String, _ depth: Int) {
+            guard depth <= 4, let items = try? fm.contentsOfDirectory(atPath: dir) else { return }
+            for name in items {
+                if name.hasPrefix(".") && name != ".github" { continue }
+                let path = (dir as NSString).appendingPathComponent(name)
+                var isDir: ObjCBool = false
+                guard fm.fileExists(atPath: path, isDirectory: &isDir) else { continue }
+                if isDir.boolValue {
+                    if !skip.contains(name) { walk(path, depth + 1) }
+                } else if let r = rank(name) {
+                    if best == nil || (r, depth) < (best!.rank, best!.depth) { best = (r, depth, path) }
+                }
+            }
+        }
+        walk(root, 0)
+        return best?.path
+    }
+
+    private static func logo(in dir: String) -> NSImage? {
+        // Worktrees share their repo's logo.
+        var root = dir
+        for marker in ["/.claude/worktrees/", "/.kandy/worktrees/", "/.worktrees/"] {
+            if let r = root.range(of: marker) { root = String(root[..<r.lowerBound]) }
+        }
+        for rel in candidates {
+            let path = (root as NSString).appendingPathComponent(rel)
+            guard let attrs = try? FileManager.default.attributesOfItem(atPath: path),
+                  let size = attrs[.size] as? Int, size > 0, size < 2_000_000,
+                  let img = NSImage(contentsOfFile: path), img.isValid, img.size.width >= 16 else { continue }
+            return img
+        }
+        return nil
+    }
+
+    /// The project icon with the provider's app icon badged in the corner,
+    /// like a document icon badged with its app.
+    /// Without a project icon, it's just the provider's app icon.
+    static func badged(cwd: String, host: String?, provider: String, size: CGFloat) -> NSImage {
+        let badge = Provider.icon(provider)
+        guard let base = image(cwd: cwd, host: host) else {
+            return NSImage(size: NSSize(width: size, height: size), flipped: false) { r in
+                if let badge {
+                    badge.draw(in: r)
+                } else {
+                    let cfg = NSImage.SymbolConfiguration(pointSize: size * 0.7, weight: .semibold)
+                        .applying(.init(paletteColors: [Provider.color(provider)]))
+                    NSImage(systemSymbolName: provider == "claude" ? "asterisk.circle.fill" : "terminal.fill",
+                            accessibilityDescription: nil)?.withSymbolConfiguration(cfg)?.draw(in: r.insetBy(dx: size * 0.1, dy: size * 0.1))
+                }
+                return true
+            }
+        }
+        return NSImage(size: NSSize(width: size, height: size), flipped: false) { r in
+            base.draw(in: r.insetBy(dx: size * 0.04, dy: size * 0.04))
+            if let badge {
+                let b = size * 0.52
+                let rect = NSRect(x: r.maxX - b + size * 0.06, y: r.minY - size * 0.06, width: b, height: b)
+                // A thin ring so the badge separates from the icon under it.
+                NSGraphicsContext.current?.compositingOperation = .clear
+                NSBezierPath(roundedRect: rect.insetBy(dx: -1, dy: -1), xRadius: b * 0.28, yRadius: b * 0.28).fill()
+                NSGraphicsContext.current?.compositingOperation = .sourceOver
+                badge.draw(in: rect)
+            }
+            return true
+        }
+    }
+}

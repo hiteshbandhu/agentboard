@@ -77,9 +77,24 @@ func runUsage(ctx context.Context, args []string) {
 	list("Top projects (active time)", s.Projects, func(c usage.Counters) string { return Hours(c.Active) })
 	list("Top models (tokens)", s.Models, func(c usage.Counters) string { return Human(c.Tokens.Total()) })
 	list("Top tools (calls)", s.Tools, func(c usage.Counters) string { return fmt.Sprint(c.Tools) })
-	for _, rl := range s.RateLimits {
-		fmt.Printf("\n%s plan: %.0f%% of %s window used, resets %s\n", rl.Provider, rl.UsedPercent,
-			window(rl.WindowMin), rl.ResetsAt.Local().Format("Jan 2 15:04"))
+	keys := make([]string, 0, len(s.RateLimits))
+	for k := range s.RateLimits {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	if len(keys) > 0 {
+		fmt.Println("\nPlan limits")
+	}
+	for _, k := range keys {
+		rl := s.RateLimits[k]
+		name := rl.Provider
+		if rl.WindowMin > 0 {
+			name += " " + window(rl.WindowMin)
+		} else if rl.Window != "" {
+			name += " " + rl.Window
+		}
+		fmt.Printf("  %-18s %3.0f%% used, resets %s  (as of %s ago)\n", name, rl.UsedPercent,
+			rl.ResetsAt.Local().Format("Jan 2 15:04"), time.Since(rl.ObservedAt).Round(time.Minute))
 	}
 }
 

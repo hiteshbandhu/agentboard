@@ -1,0 +1,101 @@
+import AppKit
+import SwiftUI
+import UserNotifications
+
+// Plain AppKit entry: a SwiftUI App with only a Settings scene opens that
+// window at launch, which a menu bar app must not do.
+@main
+enum Main {
+    static func main() {
+        let app = NSApplication.shared
+        let delegate = MainActor.assumeIsolated { AppDelegate() }
+        app.delegate = delegate
+        app.run()
+    }
+}
+
+@MainActor
+final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCenterDelegate {
+    let board = Board()
+    private let notch = NotchController()
+    private var status: StatusMenu?
+    private var defaultsObserver: Any?
+    private var settingsWindow: NSWindow?
+
+    func applicationDidFinishLaunching(_ note: Notification) {
+        UserDefaults.standard.register(defaults: ["notch": true, "notify": true, "showCount": false])
+        // Menu bar only, whatever Info.plist says (handy for debug builds).
+        NSApp.setActivationPolicy(.accessory)
+
+        let center = UNUserNotificationCenter.current()
+        center.delegate = self
+        center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
+
+        board.onEvent = { [weak self] e in self?.handle(e) }
+        board.start()
+        status = StatusMenu(board: board)
+        status?.onSettings = { [weak self] in self?.showSettings() }
+        notch.start(board: board)
+        defaultsObserver = NotificationCenter.default.addObserver(
+            forName: UserDefaults.didChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.notch.setEnabled(UserDefaults.standard.bool(forKey: "notch"))
+                self?.status?.refresh()
+            }
+        }
+    }
+
+    func showSettings() {
+        if settingsWindow == nil {
+            let w = NSWindow(contentViewController: NSHostingController(rootView: SettingsView()))
+            w.title = "AgentBoard Settings"
+            w.styleMask = [.titled, .closable]
+            w.isReleasedWhenClosed = false
+            w.center()
+            settingsWindow = w
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        settingsWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    func applicationWillTerminate(_ note: Notification) {
+        board.stop()
+    }
+
+    private func handle(_ e: BoardEvent) {
+        switch e {
+        case .needsYou, .finished:
+            notch.announce(e)
+            notify(e)
+        case .started:
+            break // too chatty to announce
+        }
+    }
+
+    private func notify(_ e: BoardEvent) {
+        guard UserDefaults.standard.bool(forKey: "notify") else { return }
+        let s = e.session
+        let content = UNMutableNotificationContent()
+        content.title = s.name
+        switch e {
+        case .needsYou:
+            content.subtitle = "\(Provider.name(s.provider)) needs you"
+            content.sound = .default
+        case .finished(_, let after):
+            // Only long turns are worth a notification.
+            guard after >= 60 else { return }
+            content.subtitle = "\(Provider.name(s.provider)) finished after \(shortDuration(after))"
+        case .started:
+            return
+        }
+        content.body = [s.project, s.host ?? ""].filter { !$0.isEmpty }.joined(separator: " · ")
+        let req = UNNotificationRequest(identifier: s.key + "\(Date().timeIntervalSince1970)", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(req)
+    }
+
+    nonisolated func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification,
+                                            withCompletionHandler handler: @escaping (UNNotificationPresentationOptions) -> Void) {
+        handler([.banner, .sound])
+    }
+}

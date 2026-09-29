@@ -69,6 +69,7 @@ type Day struct {
 // RateLimit is the latest plan-usage reading a provider reported.
 type RateLimit struct {
 	Provider    string    `json:"provider"`
+	Window      string    `json:"window,omitempty"` // "5h", "7d", "spend"; "" = the provider's primary window
 	UsedPercent float64   `json:"used_percent"`
 	WindowMin   int       `json:"window_minutes"`
 	ResetsAt    time.Time `json:"resets_at"`

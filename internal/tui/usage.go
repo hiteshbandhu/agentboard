@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -323,21 +324,41 @@ func (m *uiModel) usageLists(s usage.Summary, w, h int) []string {
 	head("TOOLS · CALLS")
 	bars(s.Tools, 5, func(c usage.Counters) float64 { return float64(c.Tools) }, func(c usage.Counters) string { return humanN(c.Tools) })
 
-	if rl, ok := s.RateLimits["codex"]; ok && len(out)+4 < h {
+	if len(s.RateLimits) > 0 && len(out)+4 < h {
 		out = append(out, "")
 		head("PLAN LIMITS")
-		gw := max(8, w-24)
-		used := int(rl.UsedPercent / 100 * float64(gw))
-		col := cGreen
-		if rl.UsedPercent >= 80 {
-			col = cRed
-		} else if rl.UsedPercent >= 50 {
-			col = cAmber
+		keys := make([]string, 0, len(s.RateLimits))
+		for k := range s.RateLimits {
+			keys = append(keys, k)
 		}
-		out = append(out, fg(cCodex).Bold(true).Render(">_ Codex ")+
-			fg(col).Render(strings.Repeat("█", used))+fg(cFaint).Render(strings.Repeat("░", gw-used))+
-			fg(cFg).Render(fmt.Sprintf(" %3.0f%%", rl.UsedPercent)))
-		out = append(out, fg(cMuted).Render(fmt.Sprintf("         %s window · resets %s", windowName(rl.WindowMin), rl.ResetsAt.Local().Format("Jan 2 15:04"))))
+		sort.Strings(keys)
+		for _, k := range keys {
+			if len(out)+2 > h {
+				break
+			}
+			rl := s.RateLimits[k]
+			label := providerMark(rl.Provider)
+			if rl.WindowMin > 0 {
+				label += " " + shortWindow(rl.WindowMin)
+			}
+			label = fit(label, 14)
+			gw := max(8, w-14-6)
+			used := min(gw, int(rl.UsedPercent/100*float64(gw)))
+			var col lipgloss.TerminalColor = cGreen
+			if rl.UsedPercent >= 80 {
+				col = cRed
+			} else if rl.UsedPercent >= 50 {
+				col = cAmber
+			}
+			out = append(out, fg(providerColor(rl.Provider)).Bold(true).Render(label)+
+				fg(col).Render(strings.Repeat("█", used))+fg(cFaint).Render(strings.Repeat("░", gw-used))+
+				fg(cFg).Render(fmt.Sprintf(" %3.0f%%", rl.UsedPercent)))
+			note := "resets " + rl.ResetsAt.Local().Format("Mon 15:04")
+			if age := time.Since(rl.ObservedAt); age > 10*time.Minute {
+				note += " · as of " + dur(age) + " ago"
+			}
+			out = append(out, strings.Repeat(" ", 14)+fg(cMuted).Render(fit(note, w-14)))
+		}
 	}
 	sess := fmt.Sprintf("%d sessions · %s prompts · %s tool calls · %s replies", s.Sessions,
 		humanN(s.Total.Prompts), humanN(s.Total.Tools), humanN(s.Total.Replies))
@@ -398,6 +419,17 @@ func cachePct(t usage.Tokens) string {
 		return "0%"
 	}
 	return fmt.Sprintf("%.0f%%", float64(t.CacheRead)*100/float64(in))
+}
+
+// shortWindow is 300 → "5h", 10080 → "7d".
+func shortWindow(min int) string {
+	if min >= 60*24 && min%(60*24) == 0 {
+		return fmt.Sprintf("%dd", min/(60*24))
+	}
+	if min >= 60 && min%60 == 0 {
+		return fmt.Sprintf("%dh", min/60)
+	}
+	return fmt.Sprintf("%dm", min)
 }
 
 func windowName(min int) string {
