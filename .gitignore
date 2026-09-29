@@ -3,3 +3,4 @@ macos/build/
 launch/out/
 .DS_Store
 PLAN.md
+dist/
