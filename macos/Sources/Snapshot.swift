@@ -17,6 +17,8 @@ enum SnapshotMode {
             )
             let model = NotchModel()
             model.geometry = geo
+            // Before any data: just the notch itself.
+            render(model, geo, dir, "notch_hidden")
             model.attach(board)
             board.objectWillChange.send()
 

@@ -346,7 +346,7 @@ def glow_mat(name, color, strength):
     fade.outputs[0].default_value = 1.0
     mul = nt.nodes.new("ShaderNodeMath")
     mul.operation = "MULTIPLY"
-    nt.links.new(tc.outputs["Generated"], mapping.inputs["Vector"])
+    nt.links.new(tc.outputs["UV"], mapping.inputs["Vector"])
     nt.links.new(mapping.outputs["Vector"], grad.inputs["Vector"])
     nt.links.new(grad.outputs["Fac"], ramp.inputs["Fac"])
     nt.links.new(ramp.outputs["Color"], mul.inputs[0])
