@@ -48,6 +48,7 @@ type sessionFile struct {
 	Entrypoint      string `json:"entrypoint"`
 	Name            string `json:"name"`
 	Status          string `json:"status"`
+	WaitingFor      string `json:"waitingFor"` // with status "waiting": "input needed", a permission prompt, …
 	UpdatedAt       int64  `json:"updatedAt"`
 	StatusUpdatedAt int64  `json:"statusUpdatedAt"`
 }
@@ -137,6 +138,9 @@ func applyFile(s *model.Session, f sessionFile) {
 	}
 	if f.Status != "" {
 		s.Status = mapStatus(f.Status, "")
+	}
+	if f.WaitingFor != "" {
+		s.Extra["waiting_for"] = f.WaitingFor
 	}
 	s.UpdatedAt = ms(max(f.UpdatedAt, f.StatusUpdatedAt))
 	s.Since = ms(f.StatusUpdatedAt)
@@ -243,6 +247,13 @@ func enrich(home string, s *model.Session) {
 		cacheMu.Unlock()
 	}
 	s.Last, s.Prompt, s.Context = c.a.Last, c.a.Prompt, c.a.Context
+	// While it waits on you, say what for: that's the useful line.
+	if w := s.Extra["waiting_for"]; w != "" && s.Status == model.StatusWaiting {
+		s.Last = "needs " + w
+		if c.a.Last != "" && !strings.HasPrefix(c.a.Last, "↳ ") {
+			s.Last += " · " + c.a.Last
+		}
+	}
 	s.Activity = c.a.Activity
 	if c.a.Model != "" {
 		s.Model = c.a.Model

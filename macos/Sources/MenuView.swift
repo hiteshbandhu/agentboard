@@ -27,8 +27,10 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             .sink { [weak self] _ in
                 // objectWillChange fires before the change lands.
                 DispatchQueue.main.async {
-                    self?.updateButton()
-                    if self?.isOpen == true { self?.rebuild() }
+                    guard let self else { return }
+                    // Rebuilding an open menu dismisses it: update the rows
+                    // in place and leave structure and button for later.
+                    if self.isOpen { self.refreshOpenMenu() } else { self.updateButton() }
                 }
             }
             .store(in: &bag)
@@ -91,7 +93,23 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         rebuild()
     }
 
-    func menuDidClose(_ menu: NSMenu) { isOpen = false }
+    func menuDidClose(_ menu: NSMenu) {
+        isOpen = false
+        updateButton()
+    }
+
+    /// Updates durations and details of the agent rows already on screen.
+    private func refreshOpenMenu() {
+        let byKey = Dictionary(board.sessions.map { ($0.key, $0) }, uniquingKeysWith: { a, _ in a })
+        for item in menu.items {
+            guard let key = item.identifier?.rawValue, let s = byKey[key] else { continue }
+            item.title = s.name
+            item.setSubtitle(detail(s))
+            if let since = s.status_since {
+                item.badge = NSMenuItemBadge(string: s.needsYou ? "needs you" : shortDuration(Date().timeIntervalSince(since)))
+            }
+        }
+    }
 
     private func rebuild() {
         menu.removeAllItems()
@@ -132,23 +150,25 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     private func agentItem(_ s: Session) -> NSMenuItem {
         let i = NSMenuItem(title: s.name, action: #selector(openBoard), keyEquivalent: "")
         i.target = self
+        i.identifier = NSUserInterfaceItemIdentifier(s.key)
         i.image = ProjectIcon.badged(cwd: s.cwd, host: s.host, provider: s.provider, size: 22)
-        let detail: String = {
-            if s.working || s.needsYou, let last = s.last, !last.isEmpty {
-                return last.replacingOccurrences(of: "↳ ", with: "")
-            }
-            var parts = [s.project]
-            if let h = s.host, !h.isEmpty { parts.append(h) }
-            if let m = s.model, !m.isEmpty { parts.append(Model.display(m)) }
-            return parts.joined(separator: " · ")
-        }()
-        i.setSubtitle(detail)
+        i.setSubtitle(detail(s))
         if let since = s.status_since {
             let text = s.needsYou ? "needs you" : shortDuration(Date().timeIntervalSince(since))
             i.badge = NSMenuItemBadge(string: text)
         }
         i.submenu = details(s)
         return i
+    }
+
+    private func detail(_ s: Session) -> String {
+        if s.working || s.needsYou, let last = s.last, !last.isEmpty {
+            return last.replacingOccurrences(of: "↳ ", with: "")
+        }
+        var parts = [s.project]
+        if let h = s.host, !h.isEmpty { parts.append(h) }
+        if let m = s.model, !m.isEmpty { parts.append(Model.display(m)) }
+        return parts.joined(separator: " · ")
     }
 
     /// Everything we know about one agent, plus a couple of useful actions.

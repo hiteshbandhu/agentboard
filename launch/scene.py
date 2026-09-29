@@ -891,13 +891,13 @@ headline("h_menu", [("And in your menu bar.", WHITE), ("Native. Tiny. Always the
 
 # ---------------------------------------------------------------- S7 outro
 
-cmd_s = "brew install agentboard"
+cmd_s = "brew install hiteshbandhu/tap/agentboard"
 pill_m, pill_fade, _ = emit_mat("pill", srgb("#15151c"), 1.0)
 bpy.ops.mesh.primitive_plane_add(size=1)
 pill = bpy.context.active_object
 pill.name = "pill"
 for v in pill.data.vertices:
-    v.co.x *= 5.6
+    v.co.x *= 7.3
     v.co.y *= 0.62
 pb = pill.modifiers.new("round", "BEVEL")
 pb.width = 0.3
@@ -918,7 +918,7 @@ Track(pill, pill_fade).bake(TYPE_AT - 4, LAST, pill_fn)
 # Typed command: one text object per prefix, each shown for its frames.
 prompt, prompt_fade = text("prompt", "$", 0.34, GREEN, fontname=MONO, align="LEFT")
 typed = []
-chars_per_frame = 0.9
+chars_per_frame = 1.1
 for n in range(1, len(cmd_s) + 1):
     o, fade = text(f"cmd{n}", cmd_s[:n], 0.34, WHITE, fontname=MONO, align="LEFT")
     typed.append((o, fade, n))

@@ -432,7 +432,7 @@ if "--poster" in argv:
         bpy.ops.mesh.primitive_plane_add(size=1)
         pill = bpy.context.active_object
         for v in pill.data.vertices:
-            v.co.x *= 5.4
+            v.co.x *= 7.9
             v.co.y *= 0.64
         pb = pill.modifiers.new("r", "BEVEL")
         pb.width = 0.31
@@ -442,7 +442,7 @@ if "--poster" in argv:
         py = lockup_y - 2.55 * big
         pill.location = (0, py, -0.05)
         mono = bpy.data.fonts.load(os.path.expanduser("~/Library/Fonts/JetBrainsMono-Bold.ttf"))
-        cmd, _ = label("pcmd", "$  brew install agentboard", 0.3, srgb("#f4f4f6"), "CENTER", mono)
+        cmd, _ = label("pcmd", "$  brew install hiteshbandhu/tap/agentboard", 0.26, srgb("#f4f4f6"), "CENTER", mono)
         cmd.location = (0, py, 0)
 
     out_path = os.path.join(HERE, "out", f"agentboard-poster-{kind}.png")
