@@ -78,7 +78,7 @@ def kick():
     phase = 2 * np.pi * np.cumsum(f) / SR
     body = np.sin(phase) * env_exp(n, 0.28)
     click = hp(rng.standard_normal(n), 3000) * env_exp(n, 0.004) * 0.35
-    k = np.tanh(2.2 * (body + click))
+    k = np.tanh(1.3 * (body + click))
     return k / np.max(np.abs(k))
 
 
@@ -130,11 +130,41 @@ def sub(f, dur, glide_from=None):
     else:
         fr = np.full(n, f)
     s = np.sin(2 * np.pi * np.cumsum(fr) / SR)
-    s = np.tanh(1.6 * s)
+    s = np.tanh(1.15 * s)
     amp = np.minimum(1, t / 0.005) * np.exp(-t / 1.4)
     r = int(0.05 * SR)
     amp[-r:] *= np.linspace(1, 0, r)
     return s * amp
+
+
+def svf_lowpass(x, cutoff, q=0.7):
+    """Chamberlin state-variable lowpass with a per-sample cutoff array.
+    Keeps its state across the whole signal: no block restarts, no clicks."""
+    out = np.empty_like(x)
+    low = band = 0.0
+    damp = 1.0 / q
+    f = 2 * np.sin(np.pi * np.minimum(cutoff, SR / 6) / SR)
+    for i in range(len(x)):
+        fi = f[i]
+        low += fi * band
+        high = x[i] - low - damp * band
+        band += fi * high
+        out[i] = low
+    return out
+
+
+def svf_bandpass(x, cutoff, q=1.2):
+    out = np.empty_like(x)
+    low = band = 0.0
+    damp = 1.0 / q
+    f = 2 * np.sin(np.pi * np.minimum(cutoff, SR / 6) / SR)
+    for i in range(len(x)):
+        fi = f[i]
+        low += fi * band
+        high = x[i] - low - damp * band
+        band += fi * high
+        out[i] = band
+    return out
 
 
 def midi(n):
@@ -216,16 +246,11 @@ for bar in range(1, BARS + 1):
 # Riser over bar 4 into the drop.
 rise_n = int(BAR * SR)
 tt = np.arange(rise_n) / SR
-noise = rng.standard_normal(rise_n)
-riser = np.zeros(rise_n)
-chunk = 1024
-for i in range(0, rise_n, chunk):
-    frac = i / rise_n
-    lo = 300 + 6000 * frac ** 2
-    seg = bp(noise[i:i + chunk + 256], lo, min(lo * 2.2, 18000))[:chunk]
-    riser[i:i + len(seg)] = seg[: rise_n - i]
-riser *= (tt / BAR) ** 2 * 0.5
-riser[int((BAR - BEAT) * SR):] *= np.linspace(1, 0, rise_n - int((BAR - BEAT) * SR)) ** 3
+frac = tt / BAR
+riser = svf_bandpass(rng.standard_normal(rise_n) * 0.5, 300 + 7000 * frac ** 2, q=1.6)
+riser *= frac ** 2 * 0.6
+cut = int((BAR - BEAT) * SR)
+riser[cut:] *= np.linspace(1, 0, rise_n - cut) ** 3
 place(fx, riser, t_of(4))
 
 # Impact on the drop and the final hit: sub boom + noise burst.
@@ -242,21 +267,12 @@ place(fx, impact(), t_of(17), 0.8)
 place(kicks, K, t_of(17), 1.0)
 beatmap["kicks"].append(round(t_of(17), 4))
 
-# Vinyl crackle under everything.
-crackle = np.zeros(N)
-idx = rng.choice(N, size=int(N / SR * 60), replace=False)
-crackle[idx] = rng.uniform(-1, 1, len(idx))
-crackle = hp(crackle, 2000) * 0.25 + lp(rng.standard_normal(N), 800) * 0.004
-
-# Intro filter: keys open up from muffled to full across bars 1–4.
+# Intro filter: keys open up from muffled to full across bars 1–4, as one
+# continuous sweep.
 t_all = np.arange(N) / SR
 cut_end = t_of(5)
-keys_f = np.zeros(N)
-seg = int(0.05 * SR)
-for i in range(0, N, seg):
-    t0 = i / SR
-    hz = 600 + (9000 - 600) * min(1, max(0, t0 / cut_end)) ** 2 if t0 < cut_end else 12000
-    keys_f[i:i + seg] = lp(keys[max(0, i - 2048):i + seg], hz)[-min(seg, N - i):]
+cutoff = np.where(t_all < cut_end, 600 + (9000 - 600) * np.clip(t_all / cut_end, 0, 1) ** 2, 12000)
+keys_f = svf_lowpass(keys, cutoff)
 
 # Sidechain: duck keys and bass under each kick.
 duck = np.ones(N)
@@ -274,26 +290,82 @@ ir /= np.sum(np.abs(ir)) / 30
 verb = fftconvolve(drums * 0.12 + keys_f * 0.08, ir)[:N]
 
 mix = (
-    kicks * 0.95
-    + drums * 0.55
+    kicks * 0.9
+    + drums * 0.5
     + keys_f * duck * 0.42
-    + bass * duck * 0.55
-    + fx * 0.6
-    + crackle * 0.5
+    + bass * duck * 0.5
+    + fx * 0.55
     + verb
 )
-mix = np.tanh(1.3 * mix)  # glue
-mix /= np.max(np.abs(mix)) / 0.89
-
-# Fade the tail.
-tail_i = int(t_of(17) * SR) + int(1.2 * SR)
-mix[tail_i:] *= np.linspace(1, 0, N - tail_i) ** 2
-
 stereo = np.stack([mix, mix], axis=1)
 # A touch of width: delay keys a few ms in the right channel.
 width = np.roll(keys_f * duck * 0.42, int(0.012 * SR))
 stereo[:, 1] += (width - keys_f * duck * 0.42) * 0.35
-stereo /= np.max(np.abs(stereo)) / 0.89
+
+# Fade the tail.
+tail_i = int(t_of(17) * SR) + int(1.2 * SR)
+stereo[tail_i:] *= (np.linspace(1, 0, N - tail_i) ** 2)[:, None]
+
+
+def limit(x, ceiling=0.8, lookahead=0.004, release=0.08):
+    """Lookahead peak limiter: gain never lets a peak exceed the ceiling,
+    reacts before the peak arrives, and recovers smoothly (no distortion)."""
+    from scipy.ndimage import maximum_filter1d
+    peak = np.max(np.abs(x), axis=1)
+    la = int(lookahead * SR)
+    # Peak over the next `la` samples, so gain is down before it hits.
+    env = maximum_filter1d(peak, size=2 * la + 1, origin=-la)
+    target = np.minimum(1.0, ceiling / np.maximum(env, 1e-9))
+    g = np.empty_like(target)
+    rel = np.exp(-1 / (release * SR))
+    cur = 1.0
+    for i in range(len(target)):
+        t = target[i]
+        cur = t if t < cur else t + (cur - t) * rel
+        g[i] = cur
+    # Smooth the attack a little so it's not a hard step.
+    g = np.convolve(g, np.ones(la) / la, mode="same")
+    return x * np.minimum(g, target)[:, None]
+
+
+def la2a(x, peak_reduction_db=-15.0, ratio=3.0, knee_db=10.0, attack=0.010,
+         release_fast=0.06, release_slow=1.6, fast_share=0.55):
+    """An LA-2A-style optical leveler. The T4 cell's feel: ~10 ms attack,
+    a two-stage release (the first half comes back fast, the rest slowly,
+    more so after sustained loud passages), a soft knee and a gentle ratio.
+    It evens the mix out instead of grabbing peaks."""
+    det = np.sqrt(np.mean(x ** 2, axis=1))  # program level, both channels
+    a = np.exp(-1 / (attack * SR))
+    rf = np.exp(-1 / (release_fast * SR))
+    rs = np.exp(-1 / (release_slow * SR))
+    ef = es = 0.0
+    env = np.empty_like(det)
+    for i in range(len(det)):
+        v = det[i]
+        ef = v + (ef - v) * (a if v > ef else rf)
+        es = v + (es - v) * (a if v > es else rs)
+        env[i] = fast_share * ef + (1 - fast_share) * es
+    lvl = 20 * np.log10(np.maximum(env, 1e-6))
+    over = lvl - peak_reduction_db
+    # Soft knee gain computer.
+    gr = np.where(over <= -knee_db / 2, 0.0,
+         np.where(over >= knee_db / 2, over * (1 - 1 / ratio),
+                  (1 - 1 / ratio) * (over + knee_db / 2) ** 2 / (2 * knee_db)))
+    g = 10 ** (-gr / 20)
+    print(f"la-2a: avg gain reduction {np.mean(gr[gr > 0.05]) if np.any(gr > 0.05) else 0:.1f} dB, max {gr.max():.1f} dB")
+    return x * g[:, None]
+
+
+from scipy.signal import resample_poly
+
+stereo /= np.max(np.abs(stereo))  # into range
+stereo = la2a(stereo)
+stereo /= np.max(np.abs(stereo))  # makeup
+stereo = limit(stereo * 1.6, ceiling=0.9)
+# True-peak ceiling at -2.2 dBTP (AAC adds ~0.7 dB), measured on a 4x oversampled copy so the
+# AAC encoder can't clip between samples.
+tp = max(np.max(np.abs(resample_poly(stereo[:, c], 4, 1))) for c in range(2))
+stereo *= (10 ** (-2.2 / 20)) / tp
 
 import wave
 pcm = (stereo * 32767).astype("<i2")

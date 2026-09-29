@@ -211,8 +211,8 @@ nt.links.new(tc.outputs["UV"], sep.inputs[0])
 nt.links.new(sep.outputs["Y"], rp.inputs["Fac"])
 nt.links.new(rp.outputs["Color"], em.inputs["Color"])
 nt.links.new(em.outputs[0], o_.inputs["Surface"])
-desk = plane("desk", 20, 8, dm)
-desk.location = (0, TOP - 4, -1)
+desk = plane("desk", 20, 9, dm)
+desk.location = (0, TOP - 3.5, -1)
 
 
 def glow(name, color, size, strength):
@@ -252,12 +252,14 @@ for i, (c, x, y, s, k) in enumerate([("#8b6cff", -4.4, -1.0, 9, 0.75), ("#2dd4bf
 # ---- the bezel: solid black above the screen's top edge.
 bzm, _ = mat("bezel", (0, 0, 0, 1))
 bz = plane("bezel", 20, 3, bzm)
-bz.location = (0, TOP + 1.5, -0.35)
+bz.location = (0, TOP + 1.5 - 0.004, -0.35)
 
 # ---- the menu bar: translucent strip, menus on the left, extras on the right.
 mbm, _ = mat("menubar", srgb("#4a5680"))
-mb = plane("menubar", 20, NOTCH_H, mbm)
-mb.location = (0, TOP - NOTCH_H / 2, -0.5)
+# The strip runs up under the bezel: the bezel sits nearer the camera, and
+# with edges exactly touching, perspective opens a hairline gap between them.
+mb = plane("menubar", 20, NOTCH_H + 0.4, mbm)
+mb.location = (0, TOP - NOTCH_H / 2 + 0.2, -0.5)
 _ = mb.data.materials[0].node_tree.nodes  # (strip is drawn a touch translucent below)
 for n in mbm.node_tree.nodes:
     if n.type == "VALUE":
