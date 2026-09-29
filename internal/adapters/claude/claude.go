@@ -6,7 +6,9 @@ package claude
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -117,6 +119,10 @@ func (a Adapter) Collect(ctx context.Context) ([]model.Session, error) {
 		sessions = append(sessions, s)
 	}
 
+	// Claude Code not installed at all: nothing to show, and not an error.
+	if errors.Is(cliErr, exec.ErrNotFound) && len(files) == 0 {
+		return nil, nil
+	}
 	if cliErr != nil && len(sessions) == 0 {
 		return nil, cliErr
 	}
