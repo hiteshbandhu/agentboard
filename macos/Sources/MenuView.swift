@@ -52,7 +52,8 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         if UserDefaults.standard.bool(forKey: "showCount") && count > 0 { parts.append("\(count)") }
         // The limit you're closest to, Claude first: what people actually watch.
         if UserDefaults.standard.bool(forKey: "showLimit"), let l = tightestLimit {
-            parts.append("\(Int(l.used_percent.rounded()))%")
+            // "~" marks a reading nothing has refreshed lately.
+            parts.append("\(l.isStale ? "~" : "")\(Int(l.used_percent.rounded()))%")
         }
         button.title = parts.isEmpty ? "" : " " + parts.joined(separator: " · ")
         button.toolTip = summary
@@ -236,9 +237,14 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             i.isEnabled = true
             i.image = gaugeImage(percent: l.used_percent, provider: l.provider)
             i.badge = NSMenuItemBadge(string: "\(Int(l.used_percent.rounded()))%")
+            var notes: [String] = []
             if let r = l.resets_at {
-                i.setSubtitle("Resets " + r.formatted(.dateTime.weekday(.abbreviated).hour().minute()))
+                notes.append("Resets " + r.formatted(.dateTime.weekday(.abbreviated).hour().minute()))
             }
+            if l.isStale, let at = l.observed_at {
+                notes.append("as of \(shortDuration(Date().timeIntervalSince(at))) ago")
+            }
+            if !notes.isEmpty { i.setSubtitle(notes.joined(separator: " · ")) }
             menu.addItem(i)
         }
     }

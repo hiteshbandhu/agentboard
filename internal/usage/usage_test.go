@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 const claudeFixture = `{"type":"user","timestamp":"2026-09-29T10:00:00Z","sessionId":"s1","cwd":"/x/proj","message":{"content":"fix the bug"}}
@@ -26,6 +27,15 @@ const codexFixture = `{"timestamp":"2026-09-29T11:00:00Z","type":"session_meta",
 {"timestamp":"2026-09-29T11:00:12Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":12.5,"window_minutes":300,"resets_at":1790700000}}}}
 `
 
+// The fixtures are written against a fixed hour; recent moves them to an hour
+// ago, because the ledger forgets sessions it hasn't heard from in a day.
+var base = time.Now().UTC().Add(-time.Hour).Truncate(time.Hour)
+
+func recent(s string) string {
+	at := base.Format("2006-01-02T15:")
+	return strings.NewReplacer("2026-09-29T10:", at, "2026-09-29T11:", at).Replace(s)
+}
+
 func setup(t *testing.T) (*Ledger, string) {
 	home := t.TempDir()
 	cdir := filepath.Join(home, ".claude", "projects", "-x-proj")
@@ -36,8 +46,8 @@ func setup(t *testing.T) (*Ledger, string) {
 		}
 	}
 	cf := filepath.Join(cdir, "s1.jsonl")
-	os.WriteFile(cf, []byte(claudeFixture), 0o644)
-	os.WriteFile(filepath.Join(xdir, "rollout-2026-09-29T11-00-00-c1.jsonl"), []byte(codexFixture), 0o644)
+	os.WriteFile(cf, []byte(recent(claudeFixture)), 0o644)
+	os.WriteFile(filepath.Join(xdir, "rollout-2026-09-29T11-00-00-c1.jsonl"), []byte(recent(codexFixture)), 0o644)
 	l := &Ledger{Dir: filepath.Join(home, "ledger"), Home: home}
 	return l, cf
 }
@@ -49,7 +59,7 @@ func TestLedger(t *testing.T) {
 	}
 	// Append more, and re-run: only the new line is read, dup ids stay deduped.
 	f, _ := os.OpenFile(cf, os.O_APPEND|os.O_WRONLY, 0)
-	f.WriteString(claudeMore)
+	f.WriteString(recent(claudeMore))
 	f.Close()
 	if err := l.Update(context.Background(), nil); err != nil {
 		t.Fatal(err)
@@ -58,7 +68,7 @@ func TestLedger(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	d := l.day("2026-09-29")
+	d := l.day(base.Local().Format("2006-01-02"))
 	var claude, codex Counters
 	for k, c := range d.Buckets {
 		switch {

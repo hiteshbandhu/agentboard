@@ -186,6 +186,10 @@ func (m *uiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.refresh()
 	case usageMsg:
 		m.usage, m.usageErr = &msg, msg.err
+	case limitsMsg:
+		if m.usage != nil {
+			m.usage.today.RateLimits, m.usage.week.RateLimits, m.usage.month.RateLimits = msg, msg, msg
+		}
 	case usageProgressMsg:
 		m.usageProgress = float64(msg)
 	case logosMsg:
@@ -607,8 +611,12 @@ func (m *uiModel) limitChips() string {
 		if l.WindowMin > 0 {
 			win = " " + shortWindow(l.WindowMin)
 		}
-		parts = append(parts, mark+fg(cMuted).Render(win+" ")+
-			lipgloss.NewStyle().Bold(true).Foreground(c).Render(fmt.Sprintf("%.0f%%", l.UsedPercent)))
+		pct := lipgloss.NewStyle().Bold(true).Foreground(c).Render(fmt.Sprintf("%.0f%%", l.UsedPercent))
+		if l.Stale(time.Now()) {
+			// An old reading: say so rather than pass it off as live.
+			pct = fg(cMuted).Render(fmt.Sprintf("~%.0f%%", l.UsedPercent))
+		}
+		parts = append(parts, mark+fg(cMuted).Render(win+" ")+pct)
 	}
 	return strings.Join(parts, "   ") + "     "
 }

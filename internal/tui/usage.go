@@ -38,13 +38,26 @@ func usageLoop(ctx context.Context, p *tea.Program) {
 			err = nil // someone else is updating; their result is on disk
 		}
 		p.Send(summarize(l, err))
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(time.Minute):
+		// Between passes, pick up new plan limits as soon as they're written.
+		seen, next := l.LimitsChanged(), time.After(time.Minute)
+	wait:
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-next:
+				break wait
+			case <-time.After(3 * time.Second):
+				if at := l.LimitsChanged(); !at.Equal(seen) {
+					seen = at
+					p.Send(limitsMsg(l.RateLimits()))
+				}
+			}
 		}
 	}
 }
+
+type limitsMsg map[string]usage.RateLimit
 
 func summarize(l *usage.Ledger, err error) usageMsg {
 	return usageMsg{today: l.Summarize(1), week: l.Summarize(7), month: l.Summarize(30), err: err}
@@ -354,7 +367,7 @@ func (m *uiModel) usageLists(s usage.Summary, w, h int) []string {
 				fg(col).Render(strings.Repeat("█", used))+fg(cFaint).Render(strings.Repeat("░", gw-used))+
 				fg(cFg).Render(fmt.Sprintf(" %3.0f%%", rl.UsedPercent)))
 			note := "resets " + rl.ResetsAt.Local().Format("Mon 15:04")
-			if age := time.Since(rl.ObservedAt); age > 10*time.Minute {
+			if age := time.Since(rl.ObservedAt); rl.Stale(time.Now()) {
 				note += " · as of " + dur(age) + " ago"
 			}
 			out = append(out, strings.Repeat(" ", 14)+fg(cMuted).Render(fit(note, w-14)))

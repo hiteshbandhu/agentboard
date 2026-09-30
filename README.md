@@ -70,6 +70,8 @@ The menu bar item is a regular macOS menu: agents with their project and status,
 
 Settings let you turn the notch, notifications, the agent count and plan usage in the menu bar on or off, and launch at login.
 
+The app never asks for access to your folders: project icons are only looked up inside project folders, and never in Desktop, Documents, Downloads or Library.
+
 <br clear="right">
 
 ## Usage & limits
@@ -87,7 +89,7 @@ Press `u` on the board, or run `agentboard usage`. agentboard keeps a small loca
   agentboard statusline --install
   ```
 
-  It backs up `~/.claude/settings.json`, and keeps your existing status line if you have one. Limits refresh whenever Claude Code renders its status line in a terminal session.
+  It backs up `~/.claude/settings.json`, and keeps your existing status line if you have one. Limits refresh every time Claude Code replies in a terminal session and show up on the board within a few seconds. Sessions run from the Claude desktop app don't have a status line, so they don't refresh it; a reading older than 15 minutes is shown with a `~` (`~71%`) so you know it's not live.
 
 ## Other machines
 

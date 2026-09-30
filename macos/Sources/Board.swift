@@ -67,6 +67,12 @@ struct RateLimit: Decodable {
     var resets_at: Date?
     var observed_at: Date?
 
+    /// Nothing has reported this limit for a while, so it's only approximate.
+    var isStale: Bool {
+        guard let at = observed_at else { return false }
+        return Date().timeIntervalSince(at) > 15 * 60
+    }
+
     var windowLabel: String {
         guard let m = window_minutes, m > 0 else { return "" }
         if m % (60 * 24) == 0 { return "\(m / (60 * 24))d" }
@@ -111,11 +117,35 @@ final class Board: ObservableObject {
             guard let self else { return }
             Task { @MainActor in self.refreshUsage() }
         }
+        // Plan limits show up the moment Claude Code reports them, not a
+        // minute later: watch the file `agentboard statusline` writes.
+        limitsSeen = Board.limitsChanged()
+        limitsTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
+            guard let self else { return }
+            Task { @MainActor in
+                let at = Board.limitsChanged()
+                if at != self.limitsSeen {
+                    self.limitsSeen = at
+                    self.refreshUsage()
+                }
+            }
+        }
+    }
+
+    private var limitsTimer: Timer?
+    private var limitsSeen: Date?
+
+    nonisolated private static func limitsChanged() -> Date? {
+        let env = ProcessInfo.processInfo.environment["XDG_DATA_HOME"] ?? ""
+        let data = env.isEmpty ? NSHomeDirectory() + "/.local/share" : env
+        let attrs = try? FileManager.default.attributesOfItem(atPath: data + "/agentboard/usage/claude-limits.json")
+        return attrs?[.modificationDate] as? Date
     }
 
     func stop() {
         process?.terminate()
         usageTimer?.invalidate()
+        limitsTimer?.invalidate()
     }
 
     // Run through the user's login shell so PATH has claude, codex and
@@ -346,6 +376,7 @@ enum ProjectIcon {
         guard (host ?? "").isEmpty else { return nil }
         let key = "|" + cwd
         if let hit = cache[key] { return hit }
+        guard searchable(cwd) else { return nil }
         var img = logo(in: cwd)
         if img == nil, hasCustomFolderIcon(cwd) {
             img = NSWorkspace.shared.icon(forFile: cwd)
@@ -369,6 +400,7 @@ enum ProjectIcon {
             let root = repoRoot(s.cwd)
             guard !searched.contains(root) else { continue }
             searched.insert(root)
+            guard searchable(root), isProject(root) else { continue }
             let key = "|" + s.cwd
             searchQueue.async {
                 guard let path = deepLogo(in: root), let img = NSImage(contentsOfFile: path), img.isValid else { return }
@@ -388,6 +420,29 @@ enum ProjectIcon {
         return root
     }
 
+    /// Folders in the home directory that macOS guards or that hold other
+    /// apps' data. Reading them is what makes macOS ask for permission, and an
+    /// icon is never worth a prompt.
+    private static let guarded: Set<String> = ["Library", "Desktop", "Documents", "Downloads", "Music", "Pictures", "Movies", "Public", "Applications", ".Trash"]
+
+    /// True when `dir` is somewhere we may look for an icon: inside the home
+    /// folder, but not the home folder itself (an agent started in ~ is not a
+    /// project) and not inside a guarded folder. Other volumes are out too.
+    static func searchable(_ dir: String) -> Bool {
+        let home = URL(fileURLWithPath: NSHomeDirectory()).resolvingSymlinksInPath().pathComponents
+        let path = URL(fileURLWithPath: dir).resolvingSymlinksInPath().pathComponents
+        guard path.count > home.count, Array(path.prefix(home.count)) == home else { return false }
+        return !guarded.contains(path[home.count])
+    }
+
+    private static let markers = [".git", "package.json", "go.mod", "Cargo.toml", "pyproject.toml", "Package.swift", "Gemfile", "pom.xml", "build.gradle", "build.gradle.kts", "composer.json", "pubspec.yaml", "mix.exs", "deno.json", "Makefile", "CMakeLists.txt"]
+
+    /// Only folders that look like a project get the deep search, so a folder
+    /// of projects (or of anything else) is never walked.
+    private static func isProject(_ dir: String) -> Bool {
+        markers.contains { FileManager.default.fileExists(atPath: (dir as NSString).appendingPathComponent($0)) }
+    }
+
     private static let skip: Set<String> = ["node_modules", ".git", ".next", "dist", "build", "out", "target", "vendor", ".venv", "venv", "Pods", "DerivedData", ".claude", ".kandy", "coverage"]
 
     private static func deepLogo(in root: String) -> String? {
@@ -402,16 +457,18 @@ enum ProjectIcon {
             if n.hasSuffix(".ico") { return 4 }
             return nil
         }
+        var budget = 2000  // directories; a project's logo is never that deep in
         func walk(_ dir: String, _ depth: Int) {
-            guard depth <= 4, let items = try? fm.contentsOfDirectory(atPath: dir) else { return }
+            guard depth <= 4, budget > 0, let items = try? fm.contentsOfDirectory(atPath: dir) else { return }
+            budget -= 1
             for name in items {
                 if name.hasPrefix(".") && name != ".github" { continue }
                 let path = (dir as NSString).appendingPathComponent(name)
-                var isDir: ObjCBool = false
-                guard fm.fileExists(atPath: path, isDirectory: &isDir) else { continue }
-                if isDir.boolValue {
+                // Never follow links: they can lead out of the project.
+                guard let type = (try? fm.attributesOfItem(atPath: path))?[.type] as? FileAttributeType else { continue }
+                if type == .typeDirectory {
                     if !skip.contains(name) { walk(path, depth + 1) }
-                } else if let r = rank(name) {
+                } else if type == .typeRegular, let r = rank(name) {
                     if best == nil || (r, depth) < (best!.rank, best!.depth) { best = (r, depth, path) }
                 }
             }

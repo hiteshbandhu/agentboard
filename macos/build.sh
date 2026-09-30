@@ -6,8 +6,8 @@
 #   macos/build.sh            # -> macos/build/AgentBoard.app
 #   macos/build.sh --install  # also copy to ~/Applications and launch
 set -euo pipefail
-cd "${0:A:h}"
 root=${0:A:h:h}
+cd "$root/macos"
 out=build/AgentBoard.app
 
 rm -rf build && mkdir -p "$out/Contents/MacOS" "$out/Contents/Helpers" "$out/Contents/Resources"

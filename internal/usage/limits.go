@@ -64,3 +64,26 @@ func (l *Ledger) claudeLimits() map[string]RateLimit {
 	}
 	return m
 }
+
+// StaleAfter is how old a reading can be before it's shown as approximate.
+// Codex logs its limits on every turn and Claude Code passes them on every
+// status line render, so an older reading means nothing has reported since.
+const StaleAfter = 15 * time.Minute
+
+// Stale reports whether the reading is too old to present as current.
+func (r RateLimit) Stale(now time.Time) bool {
+	return !r.ObservedAt.IsZero() && now.Sub(r.ObservedAt) > StaleAfter
+}
+
+// RateLimits is the latest reading of every plan limit, without touching the
+// rest of the ledger: cheap enough to call every few seconds.
+func (l *Ledger) RateLimits() map[string]RateLimit { return l.rateLimits() }
+
+// LimitsChanged is the last time Claude's limits were written.
+func (l *Ledger) LimitsChanged() time.Time {
+	fi, err := os.Stat(claudeLimitsPath(l.Dir))
+	if err != nil {
+		return time.Time{}
+	}
+	return fi.ModTime()
+}
