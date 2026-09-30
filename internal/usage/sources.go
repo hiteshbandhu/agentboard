@@ -14,7 +14,14 @@ func (l *Ledger) claudeFiles() []string {
 	root := filepath.Join(l.Home, ".claude", "projects")
 	a, _ := filepath.Glob(filepath.Join(root, "*", "*.jsonl"))
 	b, _ := filepath.Glob(filepath.Join(root, "*", "*", "subagents", "*.jsonl"))
-	return append(a, b...)
+	probe := filepath.Join(root, EscapeProject(ProbeDir())) + string(filepath.Separator)
+	var out []string
+	for _, f := range append(a, b...) {
+		if !strings.HasPrefix(f, probe) { // agentboard's own /usage probe
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 type claudeLine struct {

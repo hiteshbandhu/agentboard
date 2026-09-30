@@ -20,9 +20,16 @@ func runUsage(ctx context.Context, args []string) {
 	days := fs.Int("days", 7, "how many days, today included")
 	asJSON := fs.Bool("json", false, "print JSON")
 	noUpdate := fs.Bool("no-update", false, "don't read new agent logs first")
+	probe := fs.Bool("probe", false, "read Claude plan limits from Claude Code's /usage now")
 	_ = fs.Parse(args)
 
 	l := usage.Open(usage.DefaultDir())
+	if *probe {
+		fmt.Fprintln(os.Stderr, "reading Claude Code's /usage…")
+		if err := l.ProbeClaude(ctx); err != nil {
+			fmt.Fprintln(os.Stderr, "agentboard: probe:", err)
+		}
+	}
 	if !*noUpdate {
 		start := time.Now()
 		last := time.Time{}

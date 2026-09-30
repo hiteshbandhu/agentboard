@@ -83,13 +83,15 @@ Press `u` on the board, or run `agentboard usage`. agentboard keeps a small loca
 **Plan limits** show in the board's top bar and in the menu:
 
 - **Codex**: read automatically from Codex's own logs.
-- **Claude Code**: Claude Code shares your 5-hour and weekly limits only with its status line, so point the status line at agentboard once:
+- **Claude Code**: the menu bar app and the board open Claude Code's own `/usage` screen in the background every 15 minutes and read the 5-hour and weekly limits off it, so they stay current even when all your sessions are in the Claude desktop app. Claude Code uses its own login for that (agentboard never sees a token), and `/usage` sends nothing to the model, so it doesn't count against your limits. Turn it off in the app's Settings, or with `AGENTBOARD_NO_PROBE=1`; `agentboard usage --probe` reads them right now.
+
+  For readings after every reply in terminal sessions, also point Claude Code's status line at agentboard once:
 
   ```bash
   agentboard statusline --install
   ```
 
-  It backs up `~/.claude/settings.json`, and keeps your existing status line if you have one. Limits refresh every time Claude Code replies in a terminal session and show up on the board within a few seconds. Sessions run from the Claude desktop app don't have a status line, so they don't refresh it; a reading older than 15 minutes is shown with a `~` (`~71%`) so you know it's not live.
+  It backs up `~/.claude/settings.json`, and keeps your existing status line if you have one. Limits refresh every time Claude Code replies in a terminal session and show up on the board within a few seconds. A reading older than 15 minutes is shown with a `~` (`~71%`) so you know it's not live.
 
 ## Other machines
 
@@ -118,6 +120,7 @@ Provider logos are drawn as real images in terminals that speak the kitty graphi
 
 - Local and read-only. No telemetry, no accounts.
 - Reads session metadata and transcript tails on your machine; never your auth files or tokens.
+- To read Claude plan limits it runs Claude Code's `/usage` in safe mode (no hooks, MCP servers, plugins or tools) in its own empty folder, and removes that session's transcript afterwards.
 - The usage ledger (`~/.local/share/agentboard/usage/`) stores counts only.
 - Remote hosts use your own SSH, and send the same metadata back.
 
@@ -132,7 +135,7 @@ agentboard [flags]
   --cwd ~/code/project   only sessions under a directory
   --once | --json        print once and exit
   --images auto|kitty|blocks|off
-agentboard usage [--days 7|30] [--json]
+agentboard usage [--days 7|30] [--json] [--probe]
 agentboard statusline [--install] [--then '<your status line>']
 ```
 

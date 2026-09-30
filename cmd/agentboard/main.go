@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -24,6 +25,7 @@ import (
 	"github.com/hiteshbandhu/agentboard/internal/model"
 	"github.com/hiteshbandhu/agentboard/internal/termimg"
 	"github.com/hiteshbandhu/agentboard/internal/tui"
+	"github.com/hiteshbandhu/agentboard/internal/usage"
 )
 
 var version = "dev"
@@ -118,6 +120,11 @@ func main() {
 
 	switch {
 	case *stream:
+		// The menu bar app: keep Claude plan limits fresh even when every
+		// session is in the desktop app, which has no status line.
+		if *withHosts && !*noLocal && !*demoMode && slices.Contains(providers, "claude") {
+			go probeLoop(ctx)
+		}
 		runStream(ctx, h, *watch)
 	case *asJSON || *once:
 		snap := h.Once(ctx)
@@ -163,6 +170,18 @@ func main() {
 		if err := tui.Run(ctx, h, opt); err != nil {
 			fmt.Fprintln(os.Stderr, "agentboard:", err)
 			os.Exit(1)
+		}
+	}
+}
+
+func probeLoop(ctx context.Context) {
+	l := usage.Open(usage.DefaultDir())
+	for {
+		l.MaybeProbeClaude(ctx)
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Minute):
 		}
 	}
 }

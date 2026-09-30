@@ -38,6 +38,7 @@ func usageLoop(ctx context.Context, p *tea.Program) {
 			err = nil // someone else is updating; their result is on disk
 		}
 		p.Send(summarize(l, err))
+		go l.MaybeProbeClaude(ctx) // writes the limits file; picked up below
 		// Between passes, pick up new plan limits as soon as they're written.
 		seen, next := l.LimitsChanged(), time.After(time.Minute)
 	wait:

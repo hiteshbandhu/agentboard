@@ -18,6 +18,7 @@ import (
 
 	"github.com/hiteshbandhu/agentboard/internal/model"
 	"github.com/hiteshbandhu/agentboard/internal/proc"
+	"github.com/hiteshbandhu/agentboard/internal/usage"
 )
 
 type Adapter struct {
@@ -126,6 +127,15 @@ func (a Adapter) Collect(ctx context.Context) ([]model.Session, error) {
 	if cliErr != nil && len(sessions) == 0 {
 		return nil, cliErr
 	}
+	// agentboard's own hidden Claude Code, reading /usage, isn't an agent.
+	probe := usage.ProbeDir()
+	kept := sessions[:0]
+	for _, s := range sessions {
+		if s.CWD != probe {
+			kept = append(kept, s)
+		}
+	}
+	sessions = kept
 	for i := range sessions {
 		enrich(home, &sessions[i])
 	}

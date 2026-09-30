@@ -142,6 +142,9 @@ final class Board: ObservableObject {
         return attrs?[.modificationDate] as? Date
     }
 
+    /// Starts the helper over, e.g. after a setting it reads changed.
+    func restart() { process?.terminate() }
+
     func stop() {
         process?.terminate()
         usageTimer?.invalidate()
@@ -150,10 +153,10 @@ final class Board: ObservableObject {
 
     // Run through the user's login shell so PATH has claude, codex and
     // agentboard even though Finder launched us with a bare environment.
-    private func shellCommand(_ args: String) -> Process {
+    private func shellCommand(_ args: String, env: String = "") -> Process {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
-        p.arguments = ["-lc", "exec \(Board.binary) \(args)"]
+        p.arguments = ["-lc", "\(env)exec \(Board.binary) \(args)"]
         return p
     }
 
@@ -166,7 +169,9 @@ final class Board: ObservableObject {
     }
 
     private func launch() {
-        let p = shellCommand("--stream --with-hosts --watch 2s")
+        // The helper reads Claude's /usage every 15 minutes unless turned off.
+        let probe = UserDefaults.standard.bool(forKey: "probeLimits") ? "" : "AGENTBOARD_NO_PROBE=1 "
+        let p = shellCommand("--stream --with-hosts --watch 2s", env: probe)
         let out = Pipe()
         let err = Pipe()
         p.standardOutput = out

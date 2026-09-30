@@ -344,6 +344,7 @@ struct SettingsView: View {
     @AppStorage("notify") private var notify = true
     @AppStorage("showCount") private var showCount = false
     @AppStorage("showLimit") private var showLimit = true
+    @AppStorage("probeLimits") private var probeLimits = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -353,6 +354,13 @@ struct SettingsView: View {
                 Toggle("Notify when an agent needs you or finishes", isOn: $notify)
                 Toggle("Show agent count in the menu bar", isOn: $showCount)
                 Toggle("Show plan usage in the menu bar", isOn: $showLimit)
+            }
+            Section {
+                Toggle("Check Claude plan limits every 15 minutes", isOn: $probeLimits)
+                    .onChange(of: probeLimits) { _, _ in (NSApp.delegate as? AppDelegate)?.board.restart() }
+            } footer: {
+                Text("Opens Claude Code's /usage in the background, so limits stay current even for sessions in the Claude app. Nothing is sent to the model, and AgentBoard never sees your login.")
+                    .font(.footnote).foregroundStyle(.secondary)
             }
             Section {
                 Toggle("Launch at login", isOn: $launchAtLogin)
