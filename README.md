@@ -7,9 +7,13 @@
 **A hall monitor for your coding agents.**
 Claude Code and Codex, on this machine and your servers, in your terminal, menu bar and notch.
 
-![hallmonitor in the notch](docs/notch.gif)
 
-[▶ Film](https://github.com/hiteshbandhu/hallmonitor/releases/download/v0.2.0/hallmonitor-film.mp4) · [Install](#install) · [The board](#the-board) · [Notch & menu bar](#notch--menu-bar) · [Usage & limits](#usage--limits) · [Other machines](#other-machines) · [Privacy](#privacy)
+
+https://github.com/user-attachments/assets/0703b8dc-140a-412b-a699-1a08c8b7aa7e
+
+
+
+[Install](#install) · [The board](#the-board) · [Notch & menu bar](#notch--menu-bar) · [Usage & limits](#usage--limits) · [Other machines](#other-machines) · [Privacy](#privacy)
 
 </div>
 
