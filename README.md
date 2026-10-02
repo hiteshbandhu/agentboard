@@ -9,7 +9,7 @@ Claude Code and Codex, on this machine and your servers, in your terminal, menu 
 
 ![hallmonitor in the notch](docs/notch.gif)
 
-[▶ Launch film](https://github.com/hiteshbandhu/hallmonitor/releases/download/v0.1.1/agentboard-launch.mp4) · [Install](#install) · [The board](#the-board) · [Notch & menu bar](#notch--menu-bar) · [Usage & limits](#usage--limits) · [Other machines](#other-machines) · [Privacy](#privacy)
+[▶ Film](https://github.com/hiteshbandhu/hallmonitor/releases/download/v0.2.0/hallmonitor-film.mp4) · [Install](#install) · [The board](#the-board) · [Notch & menu bar](#notch--menu-bar) · [Usage & limits](#usage--limits) · [Other machines](#other-machines) · [Privacy](#privacy)
 
 </div>
 
