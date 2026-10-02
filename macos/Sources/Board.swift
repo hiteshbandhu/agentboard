@@ -161,7 +161,8 @@ final class Board: ObservableObject {
     /// Brings the app the agent runs in to the front: the Claude app on that
     /// session, or its terminal or editor.
     func focus(_ s: Session) {
-        var args = "focus --provider \(s.provider) --pid \(s.pid ?? 0)"
+        // Every field is quoted: sessions can come from other machines.
+        var args = "focus --provider \(Board.quote(s.provider)) --pid \(s.pid ?? 0)"
         if !s.id.isEmpty { args += " --id \(Board.quote(s.id))" }
         if let e = s.extra?["entrypoint"], !e.isEmpty { args += " --entrypoint \(Board.quote(e))" }
         if let h = s.host, !h.isEmpty { args += " --host \(Board.quote(h))" }
