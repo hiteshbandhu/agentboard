@@ -6,6 +6,8 @@
 	<string>Hall Monitor</string>
 	<key>CFBundleExecutable</key>
 	<string>HallMonitor</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>dev.hallmonitor.app</string>
 	<key>CFBundleName</key>

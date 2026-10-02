@@ -41,6 +41,7 @@ enum SnapshotMode {
                         }
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                             render(model, geo, dir, "notch_banner_done")
+                            renderView(SettingsView(), size: NSSize(width: 460, height: 420), dir, "settings")
                             NSApp.terminate(nil)
                         }
                     }
@@ -50,8 +51,11 @@ enum SnapshotMode {
     }
 
     private static func render(_ model: NotchModel, _ geo: NotchGeometry, _ dir: String, _ name: String) {
-        let size = geo.canvas
-        let host = NSHostingView(rootView: NotchView(model: model).transaction { $0.animation = nil })
+        renderView(NotchView(model: model).transaction { $0.animation = nil }, size: geo.canvas, dir, name)
+    }
+
+    private static func renderView<V: View>(_ view: V, size: NSSize, _ dir: String, _ name: String) {
+        let host = NSHostingView(rootView: view)
         host.frame = NSRect(origin: .zero, size: size)
         let win = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: size.width, height: size.height),
                            styleMask: [.borderless], backing: .buffered, defer: false)

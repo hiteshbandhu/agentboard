@@ -4,3 +4,4 @@ launch/out/
 .DS_Store
 PLAN.md
 dist/
+__pycache__/

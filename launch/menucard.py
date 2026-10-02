@@ -41,7 +41,7 @@ rows = [
     ("agent", codex, "Flaky e2e on checkout", "approve: exec · pnpm playwright test", "needs you"),
     ("sep",),
     ("header", "Working"),
-    ("agent", claude, "Migrate billing to Stripe v3", "Bash · run integration tests", "4m"),
+    ("agent", claude, "Migrate billing to Stripe v3", "2 subagents · Bash · run integration tests", "4m"),
     ("agent", claude, "Fine-tune eval harness", "Read · results.jsonl", "1m"),
     ("agent", codex, "Bump Go to 1.26", "exec · go test ./...", "59s"),
     ("sep",),
