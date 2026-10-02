@@ -1,5 +1,5 @@
 // Package remote shows sessions from other machines over SSH. The remote side
-// runs `agentboard --stream`, which prints one JSON snapshot per line; we keep
+// runs `hallmonitor --stream`, which prints one JSON snapshot per line; we keep
 // one ssh connection per host open and reconnect with backoff. No daemon, no
 // open ports: it rides on the user's ~/.ssh/config and agent.
 package remote
@@ -15,12 +15,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hiteshbandhu/agentboard/internal/model"
+	"github.com/hiteshbandhu/hallmonitor/internal/model"
 )
 
 type Adapter struct {
 	Target   string        // ssh destination, e.g. "dev@gpu-box" or a Host alias
-	Command  string        // agentboard binary on the remote, default "agentboard"
+	Command  string        // hallmonitor binary on the remote, default "hallmonitor"
 	Interval time.Duration // remote refresh interval
 	Stream   bool          // keep a live connection (TUI); false = one-shot
 
@@ -33,7 +33,8 @@ type Adapter struct {
 
 func New(target, command string, interval time.Duration, stream bool) *Adapter {
 	if command == "" {
-		command = "agentboard"
+		// Machines set up before the rename still have it as agentboard.
+		command = `"$(command -v hallmonitor || command -v agentboard || echo hallmonitor)"`
 	}
 	return &Adapter{Target: target, Command: command, Interval: interval, Stream: stream}
 }

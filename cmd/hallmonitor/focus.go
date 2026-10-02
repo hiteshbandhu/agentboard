@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/hiteshbandhu/agentboard/internal/focus"
+	"github.com/hiteshbandhu/hallmonitor/internal/focus"
 )
 
-// runFocus is `agentboard focus`: bring an agent's window to the front. The
+// runFocus is `hallmonitor focus`: bring an agent's window to the front. The
 // menu bar app calls it when you click an agent.
 func runFocus(ctx context.Context, args []string) {
 	fs := flag.NewFlagSet("focus", flag.ExitOnError)
@@ -22,7 +22,7 @@ func runFocus(ctx context.Context, args []string) {
 	_ = fs.Parse(args)
 	where, err := focus.Focus(ctx, t)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "agentboard: focus:", err)
+		fmt.Fprintln(os.Stderr, "hallmonitor: focus:", err)
 		os.Exit(1)
 	}
 	fmt.Println(where)

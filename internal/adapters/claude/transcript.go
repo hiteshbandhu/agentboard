@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hiteshbandhu/agentboard/internal/model"
+	"github.com/hiteshbandhu/hallmonitor/internal/model"
 )
 
 // activity is what we pull from the tail of a session transcript: the latest

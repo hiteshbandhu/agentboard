@@ -11,12 +11,12 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/hiteshbandhu/agentboard/internal/model"
+	"github.com/hiteshbandhu/hallmonitor/internal/model"
 )
 
 var errNoDaemon = errors.New("codex app-server daemon not running")
 
-// readOnlyMethods is the full set of methods agentboard may send. Anything
+// readOnlyMethods is the full set of methods hallmonitor may send. Anything
 // else is refused before it reaches the wire.
 var readOnlyMethods = map[string]bool{
 	"initialize":         true,
@@ -111,7 +111,7 @@ func daemonThreads(ctx context.Context, home string) ([]model.Session, error) {
 	}
 
 	if err := send(1, "initialize", map[string]any{
-		"clientInfo": map[string]string{"name": "agentboard", "version": "0.1.0"},
+		"clientInfo": map[string]string{"name": "hallmonitor", "version": "0.1.0"},
 	}); err != nil {
 		return nil, err
 	}

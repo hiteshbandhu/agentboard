@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-/// `AgentBoard --snapshot <dir>` renders the notch in each of its states to
+/// `HallMonitor --snapshot <dir>` renders the notch in each of its states to
 /// transparent PNGs, for docs and the launch video, then quits. It uses the
 /// same views and the same live data feed as the running app.
 @MainActor

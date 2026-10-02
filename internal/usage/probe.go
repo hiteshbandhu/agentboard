@@ -20,16 +20,16 @@ import (
 
 // Claude Code shows plan limits in two places: the status line (terminal
 // sessions only, after a reply) and its /usage screen. For everyone else,
-// sessions from the desktop app included, agentboard opens Claude Code in a
+// sessions from the desktop app included, hallmonitor opens Claude Code in a
 // hidden terminal now and then, types /usage and reads the screen. Claude
-// Code uses its own login for that; agentboard never sees a token, and
+// Code uses its own login for that; hallmonitor never sees a token, and
 // /usage doesn't send anything to the model, so it costs nothing.
 
 // ProbeEvery is how often plan limits are read from /usage, at most.
 const ProbeEvery = 15 * time.Minute
 
 // ProbeDir is the folder the hidden Claude Code runs in. Sessions there are
-// agentboard's own and are left off the board and out of the ledger.
+// hallmonitor's own and are left off the board and out of the ledger.
 func ProbeDir() string { return filepath.Join(filepath.Dir(DefaultDir()), "claude-probe") }
 
 // ErrNoPlanLimits means /usage showed no plan limits: signed in with an API
@@ -45,9 +45,9 @@ func probeStatePath(dir string) string { return filepath.Join(dir, "claude-probe
 
 // MaybeProbeClaude reads plan limits from /usage when nothing has reported
 // them for ProbeEvery and no probe ran in that time. Any number of
-// agentboards can call it; one probes. AGENTBOARD_NO_PROBE=1 turns it off.
+// hallmonitors can call it; one probes. HALLMONITOR_NO_PROBE=1 turns it off.
 func (l *Ledger) MaybeProbeClaude(ctx context.Context) {
-	if os.Getenv("AGENTBOARD_NO_PROBE") != "" {
+	if os.Getenv("HALLMONITOR_NO_PROBE") != "" {
 		return
 	}
 	if _, err := exec.LookPath("claude"); err != nil {

@@ -1,5 +1,5 @@
 // Package icons finds a logo for each provider without shipping any brand
-// artwork in agentboard itself. In order:
+// artwork in hallmonitor itself. In order:
 //
 //  1. the icon of the vendor's app, if it's installed (Claude.app,
 //     Codex.app or ChatGPT.app on macOS);
@@ -101,7 +101,7 @@ func cachePath(provider string) string {
 	if err != nil {
 		dir = os.TempDir()
 	}
-	return filepath.Join(dir, "agentboard", "icons", fmt.Sprintf("%s-si%s.png", provider, SimpleIconsVersion))
+	return filepath.Join(dir, "hallmonitor", "icons", fmt.Sprintf("%s-si%s.png", provider, SimpleIconsVersion))
 }
 
 // ---- installed apps ----

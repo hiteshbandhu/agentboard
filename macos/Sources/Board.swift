@@ -102,7 +102,7 @@ struct UsageSummary: Decodable {
     var rate_limits: [String: RateLimit]?
 }
 
-// MARK: - Board: runs `agentboard --stream` and publishes what it says
+// MARK: - Board: runs `hallmonitor --stream` and publishes what it says
 
 @MainActor
 final class Board: ObservableObject {
@@ -134,7 +134,7 @@ final class Board: ObservableObject {
             Task { @MainActor in self.refreshUsage() }
         }
         // Plan limits show up the moment Claude Code reports them, not a
-        // minute later: watch the file `agentboard statusline` writes.
+        // minute later: watch the file `hallmonitor statusline` writes.
         limitsSeen = Board.limitsChanged()
         limitsTimer = Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
             guard let self else { return }
@@ -154,7 +154,7 @@ final class Board: ObservableObject {
     nonisolated private static func limitsChanged() -> Date? {
         let env = ProcessInfo.processInfo.environment["XDG_DATA_HOME"] ?? ""
         let data = env.isEmpty ? NSHomeDirectory() + "/.local/share" : env
-        let attrs = try? FileManager.default.attributesOfItem(atPath: data + "/agentboard/usage/claude-limits.json")
+        let attrs = try? FileManager.default.attributesOfItem(atPath: data + "/hallmonitor/usage/claude-limits.json")
         return attrs?[.modificationDate] as? Date
     }
 
@@ -184,7 +184,7 @@ final class Board: ObservableObject {
     }
 
     // Run through the user's login shell so PATH has claude, codex and
-    // agentboard even though Finder launched us with a bare environment.
+    // hallmonitor even though Finder launched us with a bare environment.
     private func shellCommand(_ args: String, env: String = "") -> Process {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
@@ -192,17 +192,17 @@ final class Board: ObservableObject {
         return p
     }
 
-    /// The agentboard CLI: bundled next to us, or on PATH.
+    /// The hallmonitor CLI: bundled next to us, or on PATH.
     nonisolated static var binary: String {
-        if let env = ProcessInfo.processInfo.environment["AGENTBOARD_BIN"] { return env }
-        let helper = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/agentboard").path
+        if let env = ProcessInfo.processInfo.environment["HALLMONITOR_BIN"] { return env }
+        let helper = Bundle.main.bundleURL.appendingPathComponent("Contents/Helpers/hallmonitor").path
         if FileManager.default.isExecutableFile(atPath: helper) { return helper }
-        return "agentboard"
+        return "hallmonitor"
     }
 
     private func launch() {
         // The helper reads Claude's /usage every 15 minutes unless turned off.
-        let probe = UserDefaults.standard.bool(forKey: "probeLimits") ? "" : "AGENTBOARD_NO_PROBE=1 "
+        let probe = UserDefaults.standard.bool(forKey: "probeLimits") ? "" : "HALLMONITOR_NO_PROBE=1 "
         let p = shellCommand("--stream --with-hosts --watch 2s", env: probe)
         let out = Pipe()
         let err = Pipe()
@@ -220,9 +220,9 @@ final class Board: ObservableObject {
             guard let self else { return }
             Task { @MainActor in
                 self.connected = false
-                self.problem = (msg?.isEmpty == false) ? msg : "agentboard exited (\(status))"
+                self.problem = (msg?.isEmpty == false) ? msg : "hallmonitor exited (\(status))"
                 if status == 127 {
-                    self.problem = "Can't find the agentboard command. Install it, or set AGENTBOARD_BIN."
+                    self.problem = "Can't find the hallmonitor command. Install it, or set HALLMONITOR_BIN."
                 }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 3) { self.launch() }
             }
@@ -428,7 +428,7 @@ enum ProjectIcon {
     }
 
     private static var searched: Set<String> = []
-    private static let searchQueue = DispatchQueue(label: "agentboard.project-icons", qos: .utility)
+    private static let searchQueue = DispatchQueue(label: "hallmonitor.project-icons", qos: .utility)
 
     /// Looks deeper (monorepos keep logos in apps/web/public) off the main
     /// thread, once per project; calls back when something better turned up.

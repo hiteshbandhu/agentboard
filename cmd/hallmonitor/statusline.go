@@ -12,10 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hiteshbandhu/agentboard/internal/usage"
+	"github.com/hiteshbandhu/hallmonitor/internal/usage"
 )
 
-// runStatusline is `agentboard statusline`, meant to be Claude Code's
+// runStatusline is `hallmonitor statusline`, meant to be Claude Code's
 // statusLine command. It saves the plan limits Claude Code passes in (the
 // only place they're exposed), then prints a status line: its own, or the
 // output of --then, which gets the same input, so an existing status line
@@ -23,11 +23,11 @@ import (
 func runStatusline(args []string) {
 	fs := flag.NewFlagSet("statusline", flag.ExitOnError)
 	then := fs.String("then", "", "run this status line command too, and print its output instead")
-	install := fs.Bool("install", false, "set agentboard as Claude Code's status line in ~/.claude/settings.json")
+	install := fs.Bool("install", false, "set hallmonitor as Claude Code's status line in ~/.claude/settings.json")
 	_ = fs.Parse(args)
 	if *install {
 		if err := installStatusline(); err != nil {
-			fmt.Fprintln(os.Stderr, "agentboard:", err)
+			fmt.Fprintln(os.Stderr, "hallmonitor:", err)
 			os.Exit(1)
 		}
 		return
@@ -58,7 +58,7 @@ func runStatusline(args []string) {
 	fmt.Println(ownStatusline(in))
 }
 
-// installStatusline points Claude Code's statusLine at agentboard, keeping
+// installStatusline points Claude Code's statusLine at hallmonitor, keeping
 // any existing status line by chaining it with --then. The old settings
 // file is backed up next to itself first.
 func installStatusline() error {
@@ -70,7 +70,7 @@ func installStatusline() error {
 		if err := json.Unmarshal(raw, &settings); err != nil {
 			return fmt.Errorf("%s isn't valid JSON, not touching it: %w", path, err)
 		}
-		backup := path + ".bak-agentboard-" + time.Now().Format("20060102-150405")
+		backup := path + ".bak-hallmonitor-" + time.Now().Format("20060102-150405")
 		if err := os.WriteFile(backup, raw, 0o600); err != nil {
 			return err
 		}
@@ -87,7 +87,7 @@ func installStatusline() error {
 		self = resolved
 	}
 	// Prefer the stable Homebrew link over a versioned Cellar path.
-	for _, p := range []string{"/opt/homebrew/bin/agentboard", "/usr/local/bin/agentboard"} {
+	for _, p := range []string{"/opt/homebrew/bin/hallmonitor", "/usr/local/bin/hallmonitor"} {
 		if r, err := filepath.EvalSymlinks(p); err == nil && r == self {
 			self = p
 		}
@@ -97,12 +97,12 @@ func installStatusline() error {
 	if sl, ok := settings["statusLine"].(map[string]any); ok {
 		existing, _ := sl["command"].(string)
 		switch {
-		case strings.Contains(existing, "agentboard") && strings.Contains(existing, "statusline"):
+		case (strings.Contains(existing, "hallmonitor") || strings.Contains(existing, "agentboard")) && strings.Contains(existing, "statusline"):
 			fmt.Println("already installed:", existing)
 			return nil
 		case existing != "":
 			cmd += " --then " + shellQuote(existing)
-			fmt.Println("keeping your status line; agentboard runs it via --then")
+			fmt.Println("keeping your status line; hallmonitor runs it via --then")
 		}
 	}
 	settings["statusLine"] = map[string]any{"type": "command", "command": cmd}

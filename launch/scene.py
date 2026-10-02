@@ -1,4 +1,4 @@
-"""agentboard launch film: procedural motion design in Blender, synced to
+"""hallmonitor launch film: procedural motion design in Blender, synced to
 launch/out/beat.wav (100 BPM → 18 frames per beat at 30 fps).
 
   Blender -b -P launch/scene.py -- --stills 300,420   # a few frames to check
@@ -603,7 +603,7 @@ logo_bars = []
 for i, (h, c) in enumerate(zip(BAR_H, BAR_C)):
     o, fade = rounded_bar(f"logo_bar{i}", BAR_W, h, 0.18, c, 1.6)
     logo_bars.append((o, fade, h))
-word, word_fade = text("wordmark", "agentboard", 1.25, WHITE, align="LEFT")
+word, word_fade = text("wordmark", "hallmonitor", 1.25, WHITE, align="LEFT")
 tag, tag_fade = text("tagline", "One board for every coding agent.", 0.36, MUTED, fontname=BODY)
 bpy.context.view_layer.update()
 WORD_W = word.dimensions.x
@@ -891,7 +891,7 @@ headline("h_menu", [("And in your menu bar.", WHITE), ("Native. Tiny. Always the
 
 # ---------------------------------------------------------------- S7 outro
 
-cmd_s = "brew install hiteshbandhu/tap/agentboard"
+cmd_s = "brew install hiteshbandhu/tap/hallmonitor"
 pill_m, pill_fade, _ = emit_mat("pill", srgb("#15151c"), 1.0)
 bpy.ops.mesh.primitive_plane_add(size=1)
 pill = bpy.context.active_object

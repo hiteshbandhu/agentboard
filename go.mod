@@ -1,4 +1,4 @@
-module github.com/hiteshbandhu/agentboard
+module github.com/hiteshbandhu/hallmonitor
 
 go 1.26.4
 

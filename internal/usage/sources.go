@@ -17,7 +17,7 @@ func (l *Ledger) claudeFiles() []string {
 	probe := filepath.Join(root, EscapeProject(ProbeDir())) + string(filepath.Separator)
 	var out []string
 	for _, f := range append(a, b...) {
-		if !strings.HasPrefix(f, probe) { // agentboard's own /usage probe
+		if !strings.HasPrefix(f, probe) { // hallmonitor's own /usage probe
 			out = append(out, f)
 		}
 	}

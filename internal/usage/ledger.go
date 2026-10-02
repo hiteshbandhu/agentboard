@@ -3,7 +3,7 @@
 // It reads the logs the agents already write (Claude Code transcripts, Codex
 // rollouts) incrementally, remembering how far into each file it got, and
 // folds them into per-day files of hourly buckets under
-// $XDG_DATA_HOME/agentboard/usage (default ~/.local/share). The ledger outlives
+// $XDG_DATA_HOME/hallmonitor/usage (default ~/.local/share). The ledger outlives
 // the source logs, which Claude Code prunes after 30 days by default.
 //
 // Only counts are stored: tokens, replies, prompts, tool names, active time.
@@ -104,10 +104,10 @@ type Ledger struct {
 
 func DefaultDir() string {
 	if d := os.Getenv("XDG_DATA_HOME"); d != "" {
-		return filepath.Join(d, "agentboard", "usage")
+		return filepath.Join(d, "hallmonitor", "usage")
 	}
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".local", "share", "agentboard", "usage")
+	return filepath.Join(home, ".local", "share", "hallmonitor", "usage")
 }
 
 func Open(dir string) *Ledger {
@@ -118,8 +118,8 @@ func Open(dir string) *Ledger {
 // Progress reports scan progress in bytes.
 type Progress func(done, total int64)
 
-// ErrBusy means another agentboard is updating the ledger right now.
-var ErrBusy = errors.New("usage ledger is being updated by another agentboard")
+// ErrBusy means another hallmonitor is updating the ledger right now.
+var ErrBusy = errors.New("usage ledger is being updated by another hallmonitor")
 
 // Update reads new data from every agent log into the ledger.
 func (l *Ledger) Update(ctx context.Context, progress Progress) error {

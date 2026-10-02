@@ -18,8 +18,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hiteshbandhu/agentboard/internal/model"
-	"github.com/hiteshbandhu/agentboard/internal/proc"
+	"github.com/hiteshbandhu/hallmonitor/internal/model"
+	"github.com/hiteshbandhu/hallmonitor/internal/proc"
 )
 
 type Adapter struct {

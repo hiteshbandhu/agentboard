@@ -1,4 +1,4 @@
-// agentboard: a read-only board of every coding agent running on this machine
+// hallmonitor: a read-only board of every coding agent running on this machine
 // and, over SSH, on your other machines.
 package main
 
@@ -17,15 +17,16 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/hiteshbandhu/agentboard/internal/adapters/claude"
-	"github.com/hiteshbandhu/agentboard/internal/adapters/codex"
-	"github.com/hiteshbandhu/agentboard/internal/adapters/demo"
-	"github.com/hiteshbandhu/agentboard/internal/adapters/remote"
-	"github.com/hiteshbandhu/agentboard/internal/hub"
-	"github.com/hiteshbandhu/agentboard/internal/model"
-	"github.com/hiteshbandhu/agentboard/internal/termimg"
-	"github.com/hiteshbandhu/agentboard/internal/tui"
-	"github.com/hiteshbandhu/agentboard/internal/usage"
+	"github.com/hiteshbandhu/hallmonitor/internal/adapters/claude"
+	"github.com/hiteshbandhu/hallmonitor/internal/adapters/codex"
+	"github.com/hiteshbandhu/hallmonitor/internal/adapters/demo"
+	"github.com/hiteshbandhu/hallmonitor/internal/adapters/remote"
+	"github.com/hiteshbandhu/hallmonitor/internal/hub"
+	"github.com/hiteshbandhu/hallmonitor/internal/migrate"
+	"github.com/hiteshbandhu/hallmonitor/internal/model"
+	"github.com/hiteshbandhu/hallmonitor/internal/termimg"
+	"github.com/hiteshbandhu/hallmonitor/internal/tui"
+	"github.com/hiteshbandhu/hallmonitor/internal/usage"
 )
 
 var version = "dev"
@@ -36,6 +37,12 @@ func (m *multiFlag) String() string     { return strings.Join(*m, ",") }
 func (m *multiFlag) Set(v string) error { *m = append(*m, v); return nil }
 
 func main() {
+	if self, err := os.Executable(); err == nil {
+		if r, err := filepath.EvalSymlinks(self); err == nil {
+			self = r
+		}
+		migrate.FromAgentboard(self)
+	}
 	if len(os.Args) > 1 && os.Args[1] == "statusline" {
 		runStatusline(os.Args[2:])
 		return
@@ -57,7 +64,7 @@ func main() {
 		watch     = flag.Duration("watch", 2*time.Second, "refresh interval")
 		provider  = flag.String("provider", "", "comma-separated providers (claude,codex)")
 		cwd       = flag.String("cwd", "", "only sessions under this directory")
-		remoteCmd = flag.String("remote-cmd", "agentboard", "agentboard command on remote hosts")
+		remoteCmd = flag.String("remote-cmd", "", "hallmonitor command on remote hosts (default: hallmonitor, or agentboard from before the rename)")
 		noLocal   = flag.Bool("no-local", false, "only show remote hosts")
 		render    = flag.String("render", "", "debug: render one TUI frame at WxH and exit")
 		demoMode  = flag.Bool("demo", false, "show a synthetic fleet (for screenshots and trying it out)")
@@ -69,10 +76,10 @@ func main() {
 		showVer   = flag.Bool("version", false, "print version")
 		hosts     multiFlag
 	)
-	flag.Var(&hosts, "host", "ssh destination to also watch (repeatable); also read from ~/.config/agentboard/hosts")
+	flag.Var(&hosts, "host", "ssh destination to also watch (repeatable); also read from ~/.config/hallmonitor/hosts")
 	flag.Parse()
 	if *showVer {
-		fmt.Println("agentboard", version)
+		fmt.Println("hallmonitor", version)
 		return
 	}
 
@@ -87,7 +94,7 @@ func main() {
 		for _, p := range strings.Split(*provider, ",") {
 			p = strings.TrimSpace(p)
 			if _, ok := all[p]; !ok {
-				fmt.Fprintf(os.Stderr, "agentboard: unknown provider %q (have: %s)\n", p, strings.Join(order, ", "))
+				fmt.Fprintf(os.Stderr, "hallmonitor: unknown provider %q (have: %s)\n", p, strings.Join(order, ", "))
 				os.Exit(2)
 			}
 			providers = append(providers, p)
@@ -143,12 +150,12 @@ func main() {
 	case *render != "":
 		var w, hh int
 		if _, err := fmt.Sscanf(*render, "%dx%d", &w, &hh); err != nil {
-			fmt.Fprintln(os.Stderr, "agentboard: --render wants WxH")
+			fmt.Fprintln(os.Stderr, "hallmonitor: --render wants WxH")
 			os.Exit(2)
 		}
 		if *demoMode {
 			ticks := 400
-			if v, err := strconv.Atoi(os.Getenv("AGENTBOARD_DEMO_TICKS")); err == nil && v > 0 {
+			if v, err := strconv.Atoi(os.Getenv("HALLMONITOR_DEMO_TICKS")); err == nil && v > 0 {
 				ticks = v
 			}
 			for range ticks { // build up history instantly
@@ -172,7 +179,7 @@ func main() {
 		opt := tui.Options{Providers: cycle, CWD: dir, Images: termimg.Detect(*images), FetchIcon: !*noFetch,
 			Usage: !*noUsage, StartView: *view}
 		if err := tui.Run(ctx, h, opt); err != nil {
-			fmt.Fprintln(os.Stderr, "agentboard:", err)
+			fmt.Fprintln(os.Stderr, "hallmonitor:", err)
 			os.Exit(1)
 		}
 	}
@@ -212,7 +219,7 @@ func runStream(ctx context.Context, h *hub.Hub, every time.Duration) {
 	}
 }
 
-// readHostsFile reads ~/.config/agentboard/hosts: one ssh destination per
+// readHostsFile reads ~/.config/hallmonitor/hosts: one ssh destination per
 // line, # comments allowed.
 func readHostsFile() []string {
 	dir := os.Getenv("XDG_CONFIG_HOME")
@@ -220,7 +227,7 @@ func readHostsFile() []string {
 		home, _ := os.UserHomeDir()
 		dir = filepath.Join(home, ".config")
 	}
-	f, err := os.Open(filepath.Join(dir, "agentboard", "hosts"))
+	f, err := os.Open(filepath.Join(dir, "hallmonitor", "hosts"))
 	if err != nil {
 		return nil
 	}

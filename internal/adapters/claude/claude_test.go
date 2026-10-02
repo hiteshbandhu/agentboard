@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/hiteshbandhu/agentboard/internal/model"
+	"github.com/hiteshbandhu/hallmonitor/internal/model"
 )
 
 func TestSessionFileWaiting(t *testing.T) {

@@ -6,6 +6,17 @@ import UserNotifications
 // window at launch, which a menu bar app must not do.
 @main
 enum Main {
+    /// Settings from when the app was called AgentBoard (another bundle id).
+    static func migrateSettings() {
+        let d = UserDefaults.standard
+        guard !d.bool(forKey: "migratedFromAgentBoard") else { return }
+        d.set(true, forKey: "migratedFromAgentBoard")
+        guard let old = UserDefaults(suiteName: "dev.agentboard.bar") else { return }
+        for key in ["notch", "notify", "showCount", "showLimit", "probeLimits"] where d.object(forKey: key) == nil {
+            if let v = old.object(forKey: key) { d.set(v, forKey: key) }
+        }
+    }
+
     static func main() {
         let app = NSApplication.shared
         let delegate = MainActor.assumeIsolated { AppDelegate() }
@@ -23,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var settingsWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ note: Notification) {
+        Main.migrateSettings()
         UserDefaults.standard.register(defaults: ["notch": true, "notify": true, "showCount": false, "showLimit": true, "probeLimits": true])
         // Menu bar only, whatever Info.plist says (handy for debug builds).
         NSApp.setActivationPolicy(.accessory)
@@ -53,7 +65,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     func showSettings() {
         if settingsWindow == nil {
             let w = NSWindow(contentViewController: NSHostingController(rootView: SettingsView()))
-            w.title = "AgentBoard Settings"
+            w.title = "Hall Monitor Settings"
             w.styleMask = [.titled, .closable]
             w.isReleasedWhenClosed = false
             w.center()

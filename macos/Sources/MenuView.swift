@@ -57,7 +57,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         }
         button.title = parts.isEmpty ? "" : " " + parts.joined(separator: " · ")
         button.toolTip = summary
-        button.setAccessibilityLabel("AgentBoard: \(summary)")
+        button.setAccessibilityLabel("Hall Monitor: \(summary)")
     }
 
     /// Three bold rounded bars, drawn as a template image so the menu bar
@@ -150,7 +150,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         menu.addItem(action("Usage Dashboard", "chart.bar.xaxis", key: "u", #selector(openUsage)))
         menu.addItem(.separator())
         menu.addItem(action("Settings…", "gearshape", key: ",", #selector(openSettings)))
-        menu.addItem(action("Quit AgentBoard", nil, key: "q", #selector(quit)))
+        menu.addItem(action("Quit Hall Monitor", nil, key: "q", #selector(quit)))
     }
 
     private func section(_ title: String, _ items: [Session]) {
@@ -379,7 +379,7 @@ struct SettingsView: View {
                 Toggle("Check Claude plan limits every 15 minutes", isOn: $probeLimits)
                     .onChange(of: probeLimits) { _, _ in (NSApp.delegate as? AppDelegate)?.board.restart() }
             } footer: {
-                Text("Opens Claude Code's /usage in the background, so limits stay current even for sessions in the Claude app. Nothing is sent to the model, and AgentBoard never sees your login.")
+                Text("Opens Claude Code's /usage in the background, so limits stay current even for sessions in the Claude app. Nothing is sent to the model, and Hall Monitor never sees your login.")
                     .font(.footnote).foregroundStyle(.secondary)
             }
             Section {
@@ -393,7 +393,7 @@ struct SettingsView: View {
                     }
             }
             Section {
-                LabeledContent("agentboard CLI") {
+                LabeledContent("hallmonitor CLI") {
                     Text(Board.binary).textSelection(.enabled).foregroundStyle(.secondary)
                 }
             }

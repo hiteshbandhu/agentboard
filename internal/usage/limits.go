@@ -8,7 +8,7 @@ import (
 )
 
 // Claude Code only exposes plan limits to status line scripts, so
-// `agentboard statusline` saves them here as they go by.
+// `hallmonitor statusline` saves them here as they go by.
 func claudeLimitsPath(dir string) string { return filepath.Join(dir, "claude-limits.json") }
 
 type claudeWindow struct {

@@ -346,7 +346,7 @@ for i, (hh, c) in enumerate(zip([0.14, 0.24, 0.18], ["#2dd4bf", "#4ade80", "#a3e
     b = plane(f"lb{i}", 0.068, hh, m)
     key(b, fd, 0, LAST, lambda f, i=i, hh=hh: {"loc": (2.62 + i * 0.1, lock_y - 0.12 + hh / 2, 0),
                                                "alpha": out_expo(prog(f, 24 + i * 2, 16)) * lock_vis(f)})
-word, wf = label("word", "agentboard", 0.3, srgb("#f4f4f6"), "LEFT", TELEGRAF)
+word, wf = label("word", "hallmonitor", 0.3, srgb("#f4f4f6"), "LEFT", TELEGRAF)
 key(word, wf, 0, LAST, lambda f: {"loc": (2.97, lock_y - 0.035, 0), "alpha": out_expo(prog(f, 30, 16)) * lock_vis(f)})
 
 
@@ -407,7 +407,7 @@ if "--poster" in argv:
         return o
 
     bw, gap = 0.3 * big, 0.14 * big
-    word, _ = label("pword", "agentboard", 1.15 * big, srgb("#f4f4f6"), "LEFT", TELEGRAF)
+    word, _ = label("pword", "hallmonitor", 1.15 * big, srgb("#f4f4f6"), "LEFT", TELEGRAF)
     bpy.context.view_layer.update()
     total = 3 * bw + 2 * gap + 0.38 * big + word.dimensions.x
     x0 = -total / 2
@@ -442,10 +442,10 @@ if "--poster" in argv:
         py = lockup_y - 2.55 * big
         pill.location = (0, py, -0.05)
         mono = bpy.data.fonts.load(os.path.expanduser("~/Library/Fonts/JetBrainsMono-Bold.ttf"))
-        cmd, _ = label("pcmd", "$  brew install hiteshbandhu/tap/agentboard", 0.26, srgb("#f4f4f6"), "CENTER", mono)
+        cmd, _ = label("pcmd", "$  brew install hiteshbandhu/tap/hallmonitor", 0.26, srgb("#f4f4f6"), "CENTER", mono)
         cmd.location = (0, py, 0)
 
-    out_path = os.path.join(HERE, "out", f"agentboard-poster-{kind}.png")
+    out_path = os.path.join(HERE, "out", f"hallmonitor-poster-{kind}.png")
     scene.render.filepath = out_path
     bpy.ops.render.render(write_still=True)
     print("poster:", out_path)

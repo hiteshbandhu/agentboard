@@ -1,4 +1,4 @@
-"""Draws the AgentBoard menu (as it looks in the macOS menu bar) with demo
+"""Draws the Hall Monitor menu (as it looks in the macOS menu bar) with demo
 data, at 2x, for the launch video. Layout, sizes and colors follow the real
 NSMenu: dark material, section headers, icon + title + gray subtitle rows,
 capsule badges, submenu chevrons, right-aligned shortcuts."""
@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "out", "assets")
-ICONS = "/private/tmp/claude-501/-Users-hiteshbandhu-Developer-babysit/64e8b150-d7c4-41c9-8947-5f27d7bc7bd8/scratchpad/icons"
+ICONS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "out", "icons")  # app icons, png
 
 S = 2
 W = 350 * S
@@ -54,7 +54,7 @@ rows = [
     ("action", "Usage Dashboard", "⌘U"),
     ("sep",),
     ("action", "Settings…", "⌘,"),
-    ("action", "Quit AgentBoard", "⌘Q"),
+    ("action", "Quit Hall Monitor", "⌘Q"),
 ]
 
 H_ROW = {"header": 22, "agent": 40, "sep": 11, "stat": 40, "limit": 40, "action": 24}

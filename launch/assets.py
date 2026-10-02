@@ -16,7 +16,7 @@ from PIL import Image, ImageDraw, ImageFilter
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 OUT = os.path.join(HERE, "out", "assets")
-BIN = os.path.join(ROOT, "bin", "agentboard")
+BIN = os.path.join(ROOT, "bin", "hallmonitor")
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 os.makedirs(OUT, exist_ok=True)
 
@@ -24,7 +24,7 @@ os.makedirs(OUT, exist_ok=True)
 def fake_ledger(xdg):
     """30 days of plausible usage for a demo fleet."""
     rnd = random.Random(42)
-    d = os.path.join(xdg, "agentboard", "usage")
+    d = os.path.join(xdg, "hallmonitor", "usage")
     os.makedirs(os.path.join(d, "days"), exist_ok=True)
     projects = {"pay-api": 1.0, "storefront": 0.7, "evals": 0.55, "trainer": 0.4, "docs": 0.25, "monorepo": 0.2}
     models = [("claude", "claude-opus-5-5", 0.55), ("claude", "claude-sonnet-5", 0.2), ("codex", "gpt-6-astra", 0.25)]
@@ -103,7 +103,7 @@ def render(args, size, name, env_extra=None):
     return png
 
 
-def window(src, name, title="agentboard"):
+def window(src, name, title="hallmonitor"):
     """Frame a screenshot as a macOS window: rounded corners, title bar,
     traffic lights, soft shadow."""
     img = Image.open(src).convert("RGBA")
@@ -143,9 +143,9 @@ if __name__ == "__main__":
     # from this machine can end up in the video.
     fake_home = os.path.join(HERE, "out", "home")
     os.makedirs(fake_home, exist_ok=True)
-    board_env = {"XDG_DATA_HOME": xdg, "HOME": fake_home, "AGENTBOARD_HOSTNAME": "macbook-pro"}
+    board_env = {"XDG_DATA_HOME": xdg, "HOME": fake_home, "HALLMONITOR_HOSTNAME": "macbook-pro"}
     for i in range(6):
-        env = dict(board_env, AGENTBOARD_DEMO_TICKS=str(400 + i * 2), AGENTBOARD_FRAME=str(i * 3))
+        env = dict(board_env, HALLMONITOR_DEMO_TICKS=str(400 + i * 2), HALLMONITOR_FRAME=str(i * 3))
         p = render(["--demo"], (172, 50), f"board_{i:02d}", env)
         window(p, f"board_{i:02d}")
     p = render(["--demo", "--view", "usage"], (172, 50), "usage", board_env)

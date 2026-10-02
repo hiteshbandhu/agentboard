@@ -10,7 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/hiteshbandhu/agentboard/internal/usage"
+	"github.com/hiteshbandhu/hallmonitor/internal/usage"
 )
 
 // ---- data ----

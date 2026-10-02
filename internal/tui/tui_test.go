@@ -9,8 +9,8 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/hiteshbandhu/agentboard/internal/hub"
-	"github.com/hiteshbandhu/agentboard/internal/model"
+	"github.com/hiteshbandhu/hallmonitor/internal/hub"
+	"github.com/hiteshbandhu/hallmonitor/internal/model"
 )
 
 type fake struct{ n int }

@@ -18,12 +18,12 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
-	"github.com/hiteshbandhu/agentboard/internal/focus"
-	"github.com/hiteshbandhu/agentboard/internal/hub"
-	"github.com/hiteshbandhu/agentboard/internal/icons"
-	"github.com/hiteshbandhu/agentboard/internal/model"
-	"github.com/hiteshbandhu/agentboard/internal/termimg"
-	"github.com/hiteshbandhu/agentboard/internal/usage"
+	"github.com/hiteshbandhu/hallmonitor/internal/focus"
+	"github.com/hiteshbandhu/hallmonitor/internal/hub"
+	"github.com/hiteshbandhu/hallmonitor/internal/icons"
+	"github.com/hiteshbandhu/hallmonitor/internal/model"
+	"github.com/hiteshbandhu/hallmonitor/internal/termimg"
+	"github.com/hiteshbandhu/hallmonitor/internal/usage"
 )
 
 type Options struct {
@@ -66,7 +66,7 @@ func Render(h *hub.Hub, opt Options, w, ht int) string {
 	m := newModel(h, opt)
 	m.w, m.h = w, ht
 	m.frame = 7
-	if v, err := strconv.Atoi(os.Getenv("AGENTBOARD_FRAME")); err == nil {
+	if v, err := strconv.Atoi(os.Getenv("HALLMONITOR_FRAME")); err == nil {
 		m.frame = v // debug: pick the animation frame for screenshots
 	}
 	if opt.Images != termimg.Off {
@@ -159,7 +159,7 @@ type uiModel struct {
 func newModel(h *hub.Hub, opt Options) *uiModel {
 	home, _ := os.UserHomeDir()
 	hn := machineName()
-	if v := os.Getenv("AGENTBOARD_HOSTNAME"); v != "" {
+	if v := os.Getenv("HALLMONITOR_HOSTNAME"); v != "" {
 		hn = v // debug: screenshots without the real machine name
 	}
 	f := []string{""}
@@ -558,7 +558,7 @@ func (m *uiModel) machines() map[string]error {
 }
 
 func (m *uiModel) topBar() string {
-	brand := lipgloss.NewStyle().Bold(true).Foreground(cFg).Render("agentboard")
+	brand := lipgloss.NewStyle().Bold(true).Foreground(cFg).Render("hallmonitor")
 	left := strings.Repeat(" ", margin-1) + fg(gradient(0.3)).Render("▍") + brand
 
 	var chips []string

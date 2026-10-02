@@ -16,9 +16,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hiteshbandhu/agentboard/internal/model"
-	"github.com/hiteshbandhu/agentboard/internal/proc"
-	"github.com/hiteshbandhu/agentboard/internal/usage"
+	"github.com/hiteshbandhu/hallmonitor/internal/model"
+	"github.com/hiteshbandhu/hallmonitor/internal/proc"
+	"github.com/hiteshbandhu/hallmonitor/internal/usage"
 )
 
 type Adapter struct {
@@ -127,7 +127,7 @@ func (a Adapter) Collect(ctx context.Context) ([]model.Session, error) {
 	if cliErr != nil && len(sessions) == 0 {
 		return nil, cliErr
 	}
-	// agentboard's own hidden Claude Code, reading /usage, isn't an agent.
+	// hallmonitor's own hidden Claude Code, reading /usage, isn't an agent.
 	probe := usage.ProbeDir()
 	kept := sessions[:0]
 	for _, s := range sessions {

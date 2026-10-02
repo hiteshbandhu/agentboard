@@ -3,13 +3,13 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDisplayName</key>
-	<string>AgentBoard</string>
+	<string>Hall Monitor</string>
 	<key>CFBundleExecutable</key>
-	<string>AgentBoard</string>
+	<string>HallMonitor</string>
 	<key>CFBundleIdentifier</key>
-	<string>dev.agentboard.bar</string>
+	<string>dev.hallmonitor.app</string>
 	<key>CFBundleName</key>
-	<string>AgentBoard</string>
+	<string>HallMonitor</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -21,6 +21,6 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>AgentBoard opens the terminal board in iTerm or Terminal when you ask it to.</string>
+	<string>Hall Monitor opens the terminal board in iTerm or Terminal when you ask it to.</string>
 </dict>
 </plist>

@@ -11,10 +11,10 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/hiteshbandhu/agentboard/internal/usage"
+	"github.com/hiteshbandhu/hallmonitor/internal/usage"
 )
 
-// runUsage is `agentboard usage`: update the ledger, print a summary.
+// runUsage is `hallmonitor usage`: update the ledger, print a summary.
 func runUsage(ctx context.Context, args []string) {
 	fs := flag.NewFlagSet("usage", flag.ExitOnError)
 	days := fs.Int("days", 7, "how many days, today included")
@@ -27,7 +27,7 @@ func runUsage(ctx context.Context, args []string) {
 	if *probe {
 		fmt.Fprintln(os.Stderr, "reading Claude Code's /usage…")
 		if err := l.ProbeClaude(ctx); err != nil {
-			fmt.Fprintln(os.Stderr, "agentboard: probe:", err)
+			fmt.Fprintln(os.Stderr, "hallmonitor: probe:", err)
 		}
 	}
 	if !*noUpdate {
@@ -43,7 +43,7 @@ func runUsage(ctx context.Context, args []string) {
 			fmt.Fprintf(os.Stderr, "\rindexed in %s            \n", time.Since(start).Round(100*time.Millisecond))
 		}
 		if err != nil && err != usage.ErrBusy {
-			fmt.Fprintln(os.Stderr, "agentboard: usage:", err)
+			fmt.Fprintln(os.Stderr, "hallmonitor: usage:", err)
 		}
 	}
 	s := l.Summarize(*days)

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hiteshbandhu/agentboard/internal/model"
+	"github.com/hiteshbandhu/hallmonitor/internal/model"
 )
 
 type result struct {

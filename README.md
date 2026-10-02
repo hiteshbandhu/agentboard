@@ -1,19 +1,19 @@
 <div align="center">
 
-# agentboard
+# hallmonitor
 
-**A live board for your coding agents.**
+**A hall monitor for your coding agents.**
 Claude Code and Codex, on this machine and your servers, in your terminal, menu bar and notch.
 
-![agentboard in the notch](docs/notch.gif)
+![hallmonitor in the notch](docs/notch.gif)
 
-[▶ Launch film](https://github.com/hiteshbandhu/agentboard/releases/download/v0.1.1/agentboard-launch.mp4) · [Install](#install) · [The board](#the-board) · [Notch & menu bar](#notch--menu-bar) · [Usage & limits](#usage--limits) · [Other machines](#other-machines) · [Privacy](#privacy)
+[▶ Launch film](https://github.com/hiteshbandhu/hallmonitor/releases/download/v0.1.1/agentboard-launch.mp4) · [Install](#install) · [The board](#the-board) · [Notch & menu bar](#notch--menu-bar) · [Usage & limits](#usage--limits) · [Other machines](#other-machines) · [Privacy](#privacy)
 
 </div>
 
 ---
 
-You start an agent, switch to something else, and ten minutes later wonder: is it done? Is it stuck waiting for approval? Which of the five terminals was it in? agentboard answers that at a glance:
+You start an agent, switch to something else, and ten minutes later wonder: is it done? Is it stuck waiting for approval? Which of the five terminals was it in? hallmonitor answers that at a glance:
 
 - **Who's working, who's idle, who needs you**: every Claude Code and Codex session, live.
 - **What each one is doing**: current tool, last prompt, model, context size, and how many subagents it has running.
@@ -25,22 +25,24 @@ It only reads. It never sends prompts, approves anything, or talks to your agent
 ## Install
 
 ```bash
-brew install hiteshbandhu/tap/agentboard             # the board (macOS, Linux)
-brew install --cask hiteshbandhu/tap/agentboard-app  # menu bar + notch app (macOS 14+)
+brew install hiteshbandhu/tap/hallmonitor             # the board (macOS, Linux)
+brew install --cask hiteshbandhu/tap/hallmonitor-app  # menu bar + notch app (macOS 14+)
 ```
 
-Or download a binary from [Releases](https://github.com/hiteshbandhu/agentboard/releases), or build from source with Go 1.26+:
+Or download a binary from [Releases](https://github.com/hiteshbandhu/hallmonitor/releases), or build from source with Go 1.26+:
 
 ```bash
-go install github.com/hiteshbandhu/agentboard/cmd/agentboard@latest
+go install github.com/hiteshbandhu/hallmonitor/cmd/hallmonitor@latest
 ```
 
 Then:
 
 ```bash
-agentboard          # the board
-agentboard --demo   # a demo fleet, to see it before your agents are running
+hallmonitor          # the board
+hallmonitor --demo   # a demo fleet, to see it before your agents are running
 ```
+
+**Coming from agentboard?** It's the same tool, renamed. `brew upgrade` moves you over, `agentboard` still works as a command, and your usage history, hosts and status line carry over on first run.
 
 ## The board
 
@@ -63,7 +65,7 @@ Put it on a second display and leave it there.
 
 ![the notch](docs/notch.png)
 
-On a MacBook, agentboard lives around the notch: small ears show who's working, it drops open when an agent needs you or finishes a long task, and hovering the notch lists everything in flight. Click an agent to jump to it: the Claude app opens on that session, and terminal agents bring their terminal (Terminal, iTerm, Ghostty, cmux, VS Code, Cursor, tmux…) to the front. The rest of the time, clicks pass straight through.
+On a MacBook, hallmonitor lives around the notch: small ears show who's working, it drops open when an agent needs you or finishes a long task, and hovering the notch lists everything in flight. Click an agent to jump to it: the Claude app opens on that session, and terminal agents bring their terminal (Terminal, iTerm, Ghostty, cmux, VS Code, Cursor, tmux…) to the front. The rest of the time, clicks pass straight through.
 
 <img src="docs/menu.png" width="300" align="right" alt="the menu bar menu">
 
@@ -79,30 +81,30 @@ The app never asks for access to your folders: project icons are only looked up 
 
 ![usage](docs/usage.png)
 
-Press `u` on the board, or run `agentboard usage`. agentboard keeps a small local ledger of how you use agents, built from the logs Claude Code and Codex already write: agent-hours per day, when in the week you work, top projects, models and tools, and cache hit rate. It keeps only counts; no prompt text is stored.
+Press `u` on the board, or run `hallmonitor usage`. hallmonitor keeps a small local ledger of how you use agents, built from the logs Claude Code and Codex already write: agent-hours per day, when in the week you work, top projects, models and tools, and cache hit rate. It keeps only counts; no prompt text is stored.
 
 **Plan limits** show in the board's top bar and in the menu:
 
 - **Codex**: read automatically from Codex's own logs.
-- **Claude Code**: the menu bar app and the board open Claude Code's own `/usage` screen in the background every 15 minutes and read the 5-hour and weekly limits off it, so they stay current even when all your sessions are in the Claude desktop app. Claude Code uses its own login for that (agentboard never sees a token), and `/usage` sends nothing to the model, so it doesn't count against your limits. Turn it off in the app's Settings, or with `AGENTBOARD_NO_PROBE=1`; `agentboard usage --probe` reads them right now.
+- **Claude Code**: the menu bar app and the board open Claude Code's own `/usage` screen in the background every 15 minutes and read the 5-hour and weekly limits off it, so they stay current even when all your sessions are in the Claude desktop app. Claude Code uses its own login for that (hallmonitor never sees a token), and `/usage` sends nothing to the model, so it doesn't count against your limits. Turn it off in the app's Settings, or with `HALLMONITOR_NO_PROBE=1`; `hallmonitor usage --probe` reads them right now.
 
-  For readings after every reply in terminal sessions, also point Claude Code's status line at agentboard once:
+  For readings after every reply in terminal sessions, also point Claude Code's status line at hallmonitor once:
 
   ```bash
-  agentboard statusline --install
+  hallmonitor statusline --install
   ```
 
   It backs up `~/.claude/settings.json`, and keeps your existing status line if you have one. Limits refresh every time Claude Code replies in a terminal session and show up on the board within a few seconds. A reading older than 15 minutes is shown with a `~` (`~71%`) so you know it's not live.
 
 ## Other machines
 
-agentboard watches remote hosts over SSH, with no daemon or open port. Install agentboard on the server, then:
+hallmonitor watches remote hosts over SSH, with no daemon or open port. Install hallmonitor on the server, then:
 
 ```bash
-agentboard --host dev@gpu-box --host build-01
+hallmonitor --host dev@gpu-box --host build-01
 ```
 
-Or list hosts, one per line, in `~/.config/agentboard/hosts`. Each host keeps one SSH connection streaming `agentboard --stream`, reconnects on its own, and shows up as a chip in the top bar (green when live, red with the error when it isn't). Key-based SSH login is required; if `agentboard` isn't on the remote's PATH, pass `--remote-cmd /path/to/agentboard`.
+Or list hosts, one per line, in `~/.config/hallmonitor/hosts`. Each host keeps one SSH connection streaming `hallmonitor --stream`, reconnects on its own, and shows up as a chip in the top bar (green when live, red with the error when it isn't). Key-based SSH login is required; if `hallmonitor` isn't on the remote's PATH, pass `--remote-cmd /path/to/hallmonitor`.
 
 ## How status works
 
@@ -122,13 +124,13 @@ Provider logos are drawn as real images in terminals that speak the kitty graphi
 - Local and read-only. No telemetry, no accounts.
 - Reads session metadata and transcript tails on your machine; never your auth files or tokens.
 - To read Claude plan limits it runs Claude Code's `/usage` in safe mode (no hooks, MCP servers, plugins or tools) in its own empty folder, and removes that session's transcript afterwards.
-- The usage ledger (`~/.local/share/agentboard/usage/`) stores counts only.
+- The usage ledger (`~/.local/share/hallmonitor/usage/`) stores counts only.
 - Remote hosts use your own SSH, and send the same metadata back.
 
 ## Reference
 
 ```text
-agentboard [flags]
+hallmonitor [flags]
   --demo                 synthetic fleet
   --host user@host       also watch a machine over SSH (repeatable)
   --view agents|usage    screen to open on
@@ -136,14 +138,14 @@ agentboard [flags]
   --cwd ~/code/project   only sessions under a directory
   --once | --json        print once and exit
   --images auto|kitty|blocks|off
-agentboard usage [--days 7|30] [--json] [--probe]
-agentboard statusline [--install] [--then '<your status line>']
+hallmonitor usage [--days 7|30] [--json] [--probe]
+hallmonitor statusline [--install] [--then '<your status line>']
 ```
 
 ## Building
 
 ```bash
-go build ./cmd/agentboard     # the CLI
+go build ./cmd/hallmonitor     # the CLI
 macos/build.sh --install      # the menu bar app (needs the Xcode command line tools)
 scripts/release.sh 0.1.0      # release artifacts
 ```

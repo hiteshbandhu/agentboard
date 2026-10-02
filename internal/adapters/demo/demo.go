@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hiteshbandhu/agentboard/internal/model"
+	"github.com/hiteshbandhu/hallmonitor/internal/model"
 )
 
 type seed struct {
@@ -99,7 +99,21 @@ func (a *Adapter) Collect(context.Context) ([]model.Session, error) {
 			Last:      last,
 			Prompt:    f.prompt,
 			Context:   f.ctx + tick*350,
+			Subagents: demoSubagents(f.provider, i, st),
 		})
 	}
 	return out, nil
+}
+
+// demoSubagents gives a couple of the Claude sessions helpers, some running.
+func demoSubagents(provider string, i int, st model.Status) *model.Subagents {
+	if provider != "claude" || i%2 == 1 {
+		return nil
+	}
+	sa := &model.Subagents{Total: 3 + i}
+	if st == model.StatusBusy {
+		sa.Running = 1 + i%3
+		sa.Active = []string{"Map the webhook handlers", "Find every charges API call", "Check the refund paths"}[:sa.Running]
+	}
+	return sa
 }
