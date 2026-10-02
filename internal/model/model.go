@@ -56,10 +56,19 @@ type Session struct {
 	// replies), at most one per second, for backfilling history on start.
 	Activity []int64           `json:"activity,omitempty"`
 	Extra    map[string]string `json:"extra,omitempty"`
+	// Subagents the session started; nil when it never started any.
+	Subagents *Subagents `json:"subagents,omitempty"`
 
 	// History is the status sampled once per refresh, oldest first. Filled
 	// by the hub; not part of the JSON snapshot.
 	History []Status `json:"-"`
+}
+
+// Subagents counts the helpers a session started (Claude Code's Agent tool).
+type Subagents struct {
+	Running int      `json:"running"`
+	Total   int      `json:"total"`
+	Active  []string `json:"active,omitempty"` // what the running ones are doing, newest first, capped
 }
 
 type AdapterError struct {

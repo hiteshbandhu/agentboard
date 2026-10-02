@@ -66,7 +66,7 @@ final class NotchController {
         // The island is always black: native controls (the spinner) must
         // draw their dark-mode variant regardless of the system setting.
         p.appearance = NSAppearance(named: .darkAqua)
-        let host = NSHostingView(rootView: NotchView(model: model))
+        let host = ClickThroughHostingView(rootView: NotchView(model: model))
         host.sizingOptions = []
         p.contentView = host
         panel = p
@@ -87,7 +87,16 @@ final class NotchController {
         }
         let inside = zone.contains(m)
         if inside != model.hovering { model.hovering = inside }
+        // Clicks reach the rows only while the list is open; otherwise they
+        // fall through to whatever is under the notch.
+        panel?.ignoresMouseEvents = !model.hovering
     }
+}
+
+/// Takes the first click even though the panel never becomes key, so one
+/// click on a row is enough.
+final class ClickThroughHostingView<Content: View>: NSHostingView<Content> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
 enum NotchMode: Equatable {
@@ -145,7 +154,16 @@ final class NotchModel: ObservableObject {
         return .hidden
     }
 
+    private weak var board: Board?
+
+    /// A row was clicked: go to that agent and fold the list away.
+    func open(_ s: Session) {
+        board?.focus(s)
+        hovering = false
+    }
+
     func attach(_ board: Board) {
+        self.board = board
         board.objectWillChange
             .receive(on: RunLoop.main)
             .sink { [weak self, weak board] _ in
@@ -201,8 +219,8 @@ struct NotchView: View {
             case .banner:
                 if let e = model.banner { BannerRow(event: e).padding(.horizontal, 16 + geo.shoulder).transition(.blurFade) }
             case .expanded:
-                AgentList(sessions: Array(model.visible.prefix(4)))
-                    .padding(.horizontal, 14 + geo.shoulder)
+                AgentList(sessions: Array(model.visible.prefix(4))) { model.open($0) }
+                    .padding(.horizontal, 8 + geo.shoulder)
                     .padding(.top, 4)
                     .transition(.blurFade)
             default:
@@ -303,6 +321,8 @@ private struct BannerRow: View {
 
 private struct AgentList: View {
     let sessions: [Session]
+    let onOpen: (Session) -> Void
+    @State private var hovered: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -315,6 +335,12 @@ private struct AgentList: View {
             ForEach(sessions, id: \.key) { s in
                 AgentRow(session: s)
                     .frame(height: NotchGeometry.rowHeight)
+                    .padding(.horizontal, 6)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(.white.opacity(hovered == s.key && s.host == nil ? 0.08 : 0)))
+                    .contentShape(Rectangle())
+                    .onHover { hovered = $0 ? s.key : (hovered == s.key ? nil : hovered) }
+                    .onTapGesture { onOpen(s) }
+                    .help(s.host == nil ? "Open" : "Runs on \(s.host!)")
             }
         }
     }
@@ -337,6 +363,15 @@ private struct AgentRow: View {
                         .foregroundStyle(.white)
                         .lineLimit(1)
                     Spacer(minLength: 8)
+                    if s.runningSubagents > 0 {
+                        HStack(spacing: 2) {
+                            Image(systemName: "arrow.triangle.branch")
+                            Text("\(s.runningSubagents)").monospacedDigit()
+                        }
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(.green.opacity(0.9))
+                        .help(s.subagents?.label ?? "")
+                    }
                     if s.working { Thinking(provider: s.provider).font(.system(size: 11)) }
                     TimelineView(.periodic(from: .now, by: 1)) { ctx in
                         Text(status(ctx.date))
@@ -378,6 +413,7 @@ private struct AgentRow: View {
         var parts = [session.project]
         if let m = session.model, !m.isEmpty { parts.append(Model.display(m)) }
         if let c = session.context_tokens, c > 0 { parts.append("\(c / 1000)k context") }
+        if let sa = session.subagents, sa.total > 0, session.runningSubagents == 0 { parts.append(sa.label) }
         if let h = session.host, !h.isEmpty { parts.append(h) }
         return parts.joined(separator: " · ")
     }

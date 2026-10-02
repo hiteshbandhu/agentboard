@@ -6,7 +6,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,6 +18,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
 
+	"github.com/hiteshbandhu/agentboard/internal/focus"
 	"github.com/hiteshbandhu/agentboard/internal/hub"
 	"github.com/hiteshbandhu/agentboard/internal/icons"
 	"github.com/hiteshbandhu/agentboard/internal/model"
@@ -155,8 +158,7 @@ type uiModel struct {
 
 func newModel(h *hub.Hub, opt Options) *uiModel {
 	home, _ := os.UserHomeDir()
-	hn, _ := os.Hostname()
-	hn = strings.ToLower(strings.Split(hn, ".")[0])
+	hn := machineName()
 	if v := os.Getenv("AGENTBOARD_HOSTNAME"); v != "" {
 		hn = v // debug: screenshots without the real machine name
 	}
@@ -238,6 +240,14 @@ func (m *uiModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.refresh()
 		case "r":
 			go m.hub.Once(context.Background())
+		case "enter", "o":
+			if i := m.index(); i >= 0 && !m.showUsage {
+				s := m.vis[i]
+				go func() {
+					_, _ = focus.Focus(context.Background(), focus.Target{Host: s.Host, Provider: s.Provider,
+						ID: s.ID, PID: s.PID, Entrypoint: s.Extra["entrypoint"]})
+				}()
+			}
 		}
 	}
 	return m, nil
@@ -671,8 +681,18 @@ func (m *uiModel) hero() []string {
 			return gradient(1 - float64(r)/float64(rows)) // yellow-green top, teal bottom
 		}),
 		tile("IDLE", idle, rows, func(int) lipgloss.TerminalColor { return cMuted }),
-		tile("MACHINES", 1+len(m.machines()), rows, func(int) lipgloss.TerminalColor { return cFg }),
 	}
+	if running, any := m.subagents(); any {
+		tiles = append(tiles, tile("SUBAGENTS", running, rows, func(r int) lipgloss.TerminalColor {
+			if running == 0 {
+				return cMuted
+			}
+			return gradient(1 - float64(r)/float64(rows))
+		}))
+	}
+	tiles = append(tiles, [][]string{
+		tile("MACHINES", 1+len(m.machines()), rows, func(int) lipgloss.TerminalColor { return cFg }),
+	}...)
 	out := make([]string, rows+2)
 	for _, t := range tiles {
 		for i := range out {
@@ -691,6 +711,20 @@ func (m *uiModel) hero() []string {
 		out[i] = strings.Repeat(" ", margin) + out[i]
 	}
 	return out
+}
+
+// subagents is how many subagents are running across the fleet, and whether
+// any session ever started one (so the tile only shows for people who use them).
+func (m *uiModel) subagents() (running int, any bool) {
+	for _, s := range m.all {
+		if s.Subagents != nil && s.Subagents.Total > 0 {
+			any = true
+			if s.Status == model.StatusBusy || s.Status == model.StatusWaiting {
+				running += s.Subagents.Running
+			}
+		}
+	}
+	return running, any
 }
 
 func tile(label string, n, rows int, color func(row int) lipgloss.TerminalColor) []string {
@@ -892,7 +926,15 @@ func (m *uiModel) card(s model.Session, w int, selected bool, n int) []string {
 	if s.Kind == "background" {
 		meta = append(meta, "bg")
 	}
-	metaL := fg(cMuted).Render(fit(strings.Join(meta, " · "), iw))
+	metaText := func(w int) string {
+		tag, tagW := subagentTag(s.Subagents)
+		if tag == "" || w-tagW-2 < 12 {
+			return fg(cMuted).Render(fit(strings.Join(meta, " · "), w))
+		}
+		// fit pads, so the tag sits at the right edge.
+		return fg(cMuted).Render(fit(strings.Join(meta, " · "), w-tagW-2)) + "  " + tag
+	}
+	metaL := metaText(iw)
 
 	actL := ""
 	if s.Last != "" {
@@ -914,7 +956,7 @@ func (m *uiModel) card(s model.Session, w int, selected bool, n int) []string {
 	if lg, ok := m.logos[s.Provider]; ok && iw > 30 {
 		tw := iw - smallW - 2
 		titleL = lg.small[0] + "  " + lipgloss.NewStyle().Bold(true).Foreground(cFg).Render(fit(title, tw))
-		metaL = lg.small[1] + "  " + fg(cMuted).Render(fit(strings.Join(meta, " · "), tw))
+		metaL = lg.small[1] + "  " + metaText(tw)
 	}
 
 	return []string{
@@ -926,6 +968,24 @@ func (m *uiModel) card(s model.Session, w int, selected bool, n int) []string {
 		line(timeline(s.History, iw)),
 		m.bottomBorder(s, w, bl, hz, br, bs, n),
 	}
+}
+
+// subagentTag is "3/12 subagents" while some run (bright), "12 subagents"
+// once they're all done (muted), and its width.
+func subagentTag(sa *model.Subagents) (string, int) {
+	if sa == nil || sa.Total == 0 {
+		return "", 0
+	}
+	word := "subagents"
+	if sa.Total == 1 {
+		word = "subagent"
+	}
+	if sa.Running == 0 {
+		t := fmt.Sprintf("%d %s", sa.Total, word)
+		return fg(cMuted).Render(t), len(t)
+	}
+	t := fmt.Sprintf("%d/%d %s", sa.Running, sa.Total, word)
+	return fg(cGreen).Bold(true).Render(t), len(t)
 }
 
 // bottomBorder is plain, except on working cards where a glint sweeps along
@@ -994,12 +1054,12 @@ func (m *uiModel) rail(w, h int) []string {
 		out = append(out, providerChip(s.Provider)+
 			fg(cMuted).Render("  "+s.Kind))
 		kv := func(k, v string) {
-			out = append(out, fg(cMuted).Render(pad(k, 9))+fg(cFg).Render(fit(v, w-9)))
+			out = append(out, fg(cMuted).Render(pad(k, 10))+fg(cFg).Render(fit(v, w-10)))
 		}
 		lg, hasLogo := m.logos[s.Provider]
 		if hasLogo {
 			kv = func(k, v string) {
-				out = append(out, fg(cMuted).Render(pad(k, 9))+fg(cFg).Render(fit(v, w-9-largeW-2)))
+				out = append(out, fg(cMuted).Render(pad(k, 10))+fg(cFg).Render(fit(v, w-10-largeW-2)))
 			}
 		}
 		kv("where", orDash(m.short(s.CWD)))
@@ -1018,6 +1078,16 @@ func (m *uiModel) rail(w, h int) []string {
 		}
 		kv("started", started)
 		kv("session", orDash(shortID(s.ID)))
+		if sa := s.Subagents; sa != nil && sa.Total > 0 {
+			v := fmt.Sprintf("%d started", sa.Total)
+			if sa.Running > 0 {
+				v = fmt.Sprintf("%d running · %d started", sa.Running, sa.Total)
+			}
+			kv("subagents", v)
+			for _, a := range sa.Active {
+				out = append(out, pad("", 10)+fg(cGreen).Render("▸ ")+fg(cMuted).Render(fit(a, w-12)))
+			}
+		}
 		if hasLogo {
 			for r := 0; r < largeH && start+r < len(out); r++ {
 				out[start+r] = lg.large[r] + "  " + out[start+r]
@@ -1065,6 +1135,7 @@ func (m *uiModel) footer() string {
 	}
 	parts := []string{
 		k("←↑↓→", "move"),
+		k("enter", "open"),
 		k("f", "provider: "+filter),
 	}
 	if m.stale > 0 {
@@ -1273,4 +1344,20 @@ func pad(s string, n int) string {
 		return s + strings.Repeat(" ", n-w)
 	}
 	return s
+}
+
+// machineName is this machine's short name. macOS hostnames can be whatever
+// the network handed out ("unknown_46:08:…"), so prefer the name the user
+// gave the Mac.
+func machineName() string {
+	hn, _ := os.Hostname()
+	hn = strings.Split(hn, ".")[0]
+	if runtime.GOOS == "darwin" {
+		if out, err := exec.Command("scutil", "--get", "LocalHostName").Output(); err == nil {
+			if n := strings.TrimSpace(string(out)); n != "" {
+				hn = n
+			}
+		}
+	}
+	return strings.ToLower(hn)
 }

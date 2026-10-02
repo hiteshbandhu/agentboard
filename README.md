@@ -16,7 +16,7 @@ Claude Code and Codex, on this machine and your servers, in your terminal, menu 
 You start an agent, switch to something else, and ten minutes later wonder: is it done? Is it stuck waiting for approval? Which of the five terminals was it in? agentboard answers that at a glance:
 
 - **Who's working, who's idle, who needs you**: every Claude Code and Codex session, live.
-- **What each one is doing**: current tool, last prompt, model, context size.
+- **What each one is doing**: current tool, last prompt, model, context size, and how many subagents it has running.
 - **Across machines**: your laptop, dev box and GPU server on one board, over plain SSH.
 - **How much you use them**: agent-hours, tokens, cache hits, plan limits.
 
@@ -51,6 +51,7 @@ Cards are grouped into **Needs you → Working → Idle**. Working cards spin; c
 | Key | |
 |---|---|
 | ← ↑ ↓ → | move between cards |
+| `enter` | open the agent's app (the Claude app on that session, or its terminal) |
 | `f` | filter: all / Claude / Codex |
 | `s` | show sessions idle for over a day |
 | `u` | usage & limits |
@@ -62,7 +63,7 @@ Put it on a second display and leave it there.
 
 ![the notch](docs/notch.png)
 
-On a MacBook, agentboard lives around the notch: small ears show who's working, it drops open when an agent needs you or finishes a long task, and hovering the notch lists everything in flight. It never takes clicks.
+On a MacBook, agentboard lives around the notch: small ears show who's working, it drops open when an agent needs you or finishes a long task, and hovering the notch lists everything in flight. Click an agent to jump to it: the Claude app opens on that session, and terminal agents bring their terminal (Terminal, iTerm, Ghostty, cmux, VS Code, Cursor, tmux…) to the front. The rest of the time, clicks pass straight through.
 
 <img src="docs/menu.png" width="300" align="right" alt="the menu bar menu">
 

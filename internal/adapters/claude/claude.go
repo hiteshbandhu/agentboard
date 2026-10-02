@@ -271,6 +271,7 @@ func enrich(home string, s *model.Session) {
 		}
 	}
 	s.Activity = c.a.Activity
+	s.Subagents = readSubagents(p, time.Now())
 	if c.a.Model != "" {
 		s.Model = c.a.Model
 	}

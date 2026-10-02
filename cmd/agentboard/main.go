@@ -40,6 +40,10 @@ func main() {
 		runStatusline(os.Args[2:])
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "focus" {
+		runFocus(context.Background(), os.Args[2:])
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "usage" {
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 		defer stop()

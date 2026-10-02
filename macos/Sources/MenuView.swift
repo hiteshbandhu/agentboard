@@ -176,7 +176,9 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
     private func detail(_ s: Session) -> String {
         if s.working || s.needsYou, let last = s.last, !last.isEmpty {
-            return last.replacingOccurrences(of: "↳ ", with: "")
+            let doing = last.replacingOccurrences(of: "↳ ", with: "")
+            let n = s.runningSubagents
+            return n > 0 ? "\(n) subagent\(n == 1 ? "" : "s") · " + doing : doing
         }
         var parts = [s.project]
         if let h = s.host, !h.isEmpty { parts.append(h) }
@@ -195,6 +197,14 @@ final class StatusMenu: NSObject, NSMenuDelegate {
             i.setSubtitle(label)
             m.addItem(i)
         }
+        if (s.host ?? "").isEmpty {
+            let open = NSMenuItem(title: "Open", action: #selector(focusAgent(_:)), keyEquivalent: "")
+            open.target = self
+            open.representedObject = s
+            open.image = NSImage(systemSymbolName: "arrow.up.forward.app", accessibilityDescription: nil)
+            m.addItem(open)
+            m.addItem(.separator())
+        }
         m.addItem(.sectionHeader(title: "\(Provider.name(s.provider)) · \(statusWord(s.status))"))
         info("Doing", s.last?.replacingOccurrences(of: "↳ ", with: ""))
         info("Asked", s.prompt.map { "“\($0)”" })
@@ -202,6 +212,12 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         var model = s.model.map(Model.display) ?? ""
         if let c = s.context_tokens, c > 0 { model += model.isEmpty ? "\(c / 1000)k context" : " · \(c / 1000)k context" }
         info("Model", model)
+        if let sa = s.subagents, sa.total > 0 {
+            info("Subagents", s.runningSubagents > 0 ? sa.label : "\(sa.total) started, none running")
+            if s.runningSubagents > 0 {
+                for a in sa.active ?? [] { info("Running", a) }
+            }
+        }
         info("Machine", s.host)
         if let started = s.started_at {
             info("Started", started.formatted(.relative(presentation: .named)))
@@ -273,6 +289,10 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     @objc private func openSettings() { onSettings?() }
 
     @objc private func quit() { NSApp.terminate(nil) }
+
+    @objc private func focusAgent(_ sender: NSMenuItem) {
+        if let s = sender.representedObject as? Session { board.focus(s) }
+    }
 
     @objc private func copyID(_ sender: NSMenuItem) {
         guard let id = sender.representedObject as? String else { return }

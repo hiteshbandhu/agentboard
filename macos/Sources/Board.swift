@@ -19,6 +19,11 @@ struct Session: Decodable, Hashable {
     var updated_at: Date?
     var started_at: Date?
     var context_tokens: Int?
+    var subagents: Subagents?
+    var extra: [String: String]?
+
+    /// Subagents running right now; only counts while the session works.
+    var runningSubagents: Int { working || needsYou ? subagents?.running ?? 0 : 0 }
 
     var key: String { "\(host ?? "")|\(provider)|\(id.isEmpty ? "pid:\(pid ?? 0)" : id)" }
     var project: String { (cwd as NSString).lastPathComponent }
@@ -31,6 +36,17 @@ struct Session: Decodable, Hashable {
     var stale: Bool {
         guard !needsYou, !working, let seen = lastSeen else { return false }
         return Date().timeIntervalSince(seen) > 24 * 3600
+    }
+}
+
+struct Subagents: Decodable, Hashable {
+    var running: Int
+    var total: Int
+    var active: [String]?
+
+    var label: String {
+        let word = total == 1 ? "subagent" : "subagents"
+        return running > 0 ? "\(running) of \(total) \(word) running" : "\(total) \(word)"
     }
 }
 
@@ -141,6 +157,21 @@ final class Board: ObservableObject {
         let attrs = try? FileManager.default.attributesOfItem(atPath: data + "/agentboard/usage/claude-limits.json")
         return attrs?[.modificationDate] as? Date
     }
+
+    /// Brings the app the agent runs in to the front: the Claude app on that
+    /// session, or its terminal or editor.
+    func focus(_ s: Session) {
+        var args = "focus --provider \(s.provider) --pid \(s.pid ?? 0)"
+        if !s.id.isEmpty { args += " --id \(Board.quote(s.id))" }
+        if let e = s.extra?["entrypoint"], !e.isEmpty { args += " --entrypoint \(Board.quote(e))" }
+        if let h = s.host, !h.isEmpty { args += " --host \(Board.quote(h))" }
+        let p = shellCommand(args)
+        p.standardOutput = FileHandle.nullDevice
+        p.standardError = FileHandle.nullDevice
+        try? p.run()
+    }
+
+    nonisolated static func quote(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
 
     /// Starts the helper over, e.g. after a setting it reads changed.
     func restart() { process?.terminate() }
