@@ -28,6 +28,7 @@ app=dist/tmp/HallMonitor.app
 mkdir -p $app/Contents/{MacOS,Helpers,Resources}
 sed "s|<string>0.1.0</string>|<string>$v</string>|" macos/Info.plist > $app/Contents/Info.plist
 cp macos/AppIcon.icns $app/Contents/Resources/
+cp -R macos/Fonts $app/Contents/Resources/
 for arch in arm64 x86_64; do
   swiftc -O -parse-as-library -target $arch-apple-macos14.0 \
     -framework SwiftUI -framework AppKit -framework UserNotifications \
