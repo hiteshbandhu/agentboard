@@ -55,11 +55,12 @@ final class MainWindow: NSObject, NSWindowDelegate {
             let w = NSWindow(contentViewController: host)
             w.title = "Hall Monitor"
             w.appearance = NSAppearance(named: .darkAqua)
-            // Let SwiftUI's split view own the unified toolbar; forcing a
-            // full-size content view here leaves the old title bar's edge
-            // drawn through the toolbar.
-            w.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            w.toolbarStyle = .unified
+            // No toolbar: content runs to the top and the traffic lights sit
+            // over the sidebar. Each pane draws its own header and controls.
+            w.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+            w.titlebarAppearsTransparent = true
+            w.titleVisibility = .hidden
+            w.backgroundColor = NSColor(Theme.canvas)
             w.setContentSize(NSSize(width: 1180, height: 760))
             w.minSize = NSSize(width: 860, height: 560)
             w.isReleasedWhenClosed = false
@@ -99,7 +100,7 @@ struct MainView: View {
         NavigationSplitView {
             List(selection: Binding(get: { nav.pane }, set: { if let p = $0 { nav.pane = p } })) {
                 SidebarHeader(board: board)
-                    .listRowInsets(EdgeInsets(top: 4, leading: 6, bottom: 14, trailing: 6))
+                    .listRowInsets(EdgeInsets(top: 30, leading: 6, bottom: 14, trailing: 6))
                     .selectionDisabled()
                 Section {
                     ForEach(Pane.allCases) { p in
@@ -135,6 +136,8 @@ struct MainView: View {
             .animation(.smooth(duration: 0.22), value: nav.pane)
         }
         .frame(minWidth: 860, minHeight: 560)
+        .toolbar(removing: .sidebarToggle)
+        .toolbar(.hidden, for: .windowToolbar)
         .preferredColorScheme(.dark)
         .tint(Theme.teal)
         .font(Theme.font(13))

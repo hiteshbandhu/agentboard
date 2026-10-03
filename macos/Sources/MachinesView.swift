@@ -12,6 +12,10 @@ struct MachinesView: View {
         let machines = board.machines
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
+                PaneHeader(title: "Machines",
+                           subtitle: "\(machines.count) machine\(machines.count == 1 ? "" : "s") · \(machines.reduce(0) { $0 + $1.agents.count }) agents") {
+                    EmptyView()
+                }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 300, maximum: 520), spacing: 14, alignment: .top)],
                           alignment: .leading, spacing: 14) {
                     ForEach(machines) { m in
@@ -44,8 +48,6 @@ struct MachinesView: View {
             .padding(24)
         }
         .background(Backdrop())
-        .navigationTitle("Machines")
-        .navigationSubtitle("\(machines.count) machine\(machines.count == 1 ? "" : "s") · \(machines.reduce(0) { $0 + $1.agents.count }) agents")
     }
 
     private func add() {

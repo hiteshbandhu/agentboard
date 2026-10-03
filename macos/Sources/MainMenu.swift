@@ -32,6 +32,8 @@ enum MainMenu {
         edit.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
         edit.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
         edit.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        edit.addItem(.separator())
+        edit.addItem(item("Find…", #selector(Target.find), "f", target))
         add(bar, "Edit", edit)
 
         let view = NSMenu(title: "View")
@@ -82,5 +84,6 @@ enum MainMenu {
 
         @objc func pane(_ sender: NSMenuItem) { openPane(Pane.allCases[sender.tag]) }
         @objc func settings() { openSettings() }
+        @objc func find() { NotificationCenter.default.post(name: .focusSearch, object: nil) }
     }
 }

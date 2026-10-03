@@ -83,8 +83,11 @@ struct UsageView: View {
 
     var body: some View {
         ScrollView {
-            if let s = store.current {
-                VStack(alignment: .leading, spacing: 18) {
+            VStack(alignment: .leading, spacing: 18) {
+                PaneHeader(title: "Usage", subtitle: store.loading ? "Updating…" : "From your agents’ own logs") {
+                    Chips(options: [(1, "Today"), (7, "7 days"), (30, "30 days")], selection: $store.days)
+                }
+                if let s = store.current {
                     KPIs(s: s)
                     HStack(alignment: .top, spacing: 14) {
                         DailyChart(s: s, days: store.days)
@@ -99,27 +102,14 @@ struct UsageView: View {
                         TopList(title: "Tools", items: s.tools ?? [], value: { Double($0.tools ?? 0) },
                                 format: { "\(Int($0))" })
                     }
+                } else {
+                    ProgressView("Reading your agents’ logs…")
+                        .frame(maxWidth: .infinity, minHeight: 400)
                 }
-                .padding(24)
-            } else {
-                ProgressView("Reading your agents’ logs…")
-                    .frame(maxWidth: .infinity, minHeight: 400)
             }
+            .padding(24)
         }
         .background(Backdrop())
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Picker("Range", selection: $store.days) {
-                    Text("Today").tag(1)
-                    Text("7 days").tag(7)
-                    Text("30 days").tag(30)
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 230)
-            }
-        }
-        .navigationTitle("Usage")
-        .navigationSubtitle(store.loading ? "Updating…" : "From your agents’ own logs")
     }
 }
 

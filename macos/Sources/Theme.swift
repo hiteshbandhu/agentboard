@@ -94,3 +94,117 @@ struct StatusRail: View {
         Capsule().fill(color).frame(width: 3)
     }
 }
+
+// MARK: - In-window controls (instead of the system toolbar)
+
+/// The top of each pane: a title, a live subtitle, and the pane's controls.
+struct PaneHeader<Controls: View>: View {
+    let title: String
+    let subtitle: String
+    @ViewBuilder var controls: Controls
+
+    var body: some View {
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title).font(Theme.font(22, .semibold)).foregroundStyle(.white)
+                Text(subtitle)
+                    .font(Theme.font(12))
+                    .foregroundStyle(.white.opacity(0.5))
+                    .contentTransition(.numericText())
+                    .animation(.smooth, value: subtitle)
+            }
+            Spacer(minLength: 12)
+            controls
+        }
+    }
+}
+
+/// A row of options in one rounded track; the chosen one is lit.
+struct Chips<T: Hashable>: View {
+    let options: [(T, String)]
+    @Binding var selection: T
+    @Namespace private var ns
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(options, id: \.0) { value, label in
+                let on = value == selection
+                Text(label)
+                    .font(Theme.font(12, .medium))
+                    .foregroundStyle(on ? Color.white : Color.white.opacity(0.55))
+                    .padding(.horizontal, 12)
+                    .frame(height: 26)
+                    .background {
+                        if on {
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .fill(Color.white.opacity(0.11))
+                                .matchedGeometryEffect(id: "chip", in: ns)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture { withAnimation(.snappy(duration: 0.22)) { selection = value } }
+            }
+        }
+        .padding(3)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.panel))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.stroke))
+    }
+}
+
+/// A search field in the theme. ⌘F focuses it (Edit ▸ Find).
+struct SearchField: View {
+    @Binding var text: String
+    var prompt = "Search"
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass").font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.white.opacity(0.45))
+            TextField(prompt, text: $text)
+                .textFieldStyle(.plain)
+                .font(Theme.font(12.5))
+                .focused($focused)
+                .onExitCommand { text = ""; focused = false }
+            if !text.isEmpty {
+                Button { text = "" } label: {
+                    Image(systemName: "xmark.circle.fill").foregroundStyle(.white.opacity(0.4))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(width: 210, height: 32)
+        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.panel))
+        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous)
+            .strokeBorder(focused ? Theme.teal.opacity(0.7) : Theme.stroke))
+        .onReceive(NotificationCenter.default.publisher(for: .focusSearch)) { _ in focused = true }
+    }
+}
+
+/// A square icon button in the theme.
+struct IconButton: View {
+    let symbol: String
+    var on = false
+    let help: String
+    let action: () -> Void
+    @State private var hover = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(on ? Theme.teal : Color.white.opacity(hover ? 0.9 : 0.6))
+                .frame(width: 32, height: 32)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(hover ? Theme.panelHi : Theme.panel))
+                .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(Theme.stroke))
+        }
+        .buttonStyle(.plain)
+        .onHover { hover = $0 }
+        .help(help)
+    }
+}
+
+extension Notification.Name {
+    static let focusSearch = Notification.Name("HallMonitorFocusSearch")
+}

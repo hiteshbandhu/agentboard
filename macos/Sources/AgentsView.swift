@@ -32,6 +32,14 @@ struct AgentsView: View {
 
         ScrollView {
             VStack(alignment: .leading, spacing: 22) {
+                PaneHeader(title: "Agents", subtitle: subtitle) {
+                    Chips(options: [("all", "All"), ("claude", "Claude"), ("codex", "Codex")], selection: $nav.filter)
+                    SearchField(text: $nav.search, prompt: "Search agents")
+                    IconButton(symbol: "terminal", help: "Open the board in a terminal") { Launcher.openBoard() }
+                    IconButton(symbol: "sidebar.right", on: nav.inspector, help: "Show or hide details") {
+                        withAnimation(.snappy) { nav.inspector.toggle() }
+                    }
+                }
                 Header(board: board)
                 if list.isEmpty {
                     ContentUnavailableView {
@@ -43,14 +51,13 @@ struct AgentsView: View {
                     }
                     .frame(maxWidth: .infinity, minHeight: 260)
                 }
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 300, maximum: 460), spacing: 14)],
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 300, maximum: 460), spacing: 14, alignment: .top)],
                           alignment: .leading, spacing: 14, pinnedViews: []) {
                     ForEach(groups, id: \.0) { title, items in
                         Section {
                             ForEach(items, id: \.key) { s in
                                 AgentCard(session: s, history: board.history[s.key] ?? [],
                                           selected: nav.selection == s.key)
-                                    .equatable()
                                     .onTapGesture(count: 2) { board.focus(s) }
                                     .onTapGesture { nav.selection = s.key }
                                     .contextMenu { menu(for: s) }
@@ -80,7 +87,6 @@ struct AgentsView: View {
             return .handled
         }
         .onAppear { focused = true }
-        .searchable(text: $nav.search, placement: .toolbar, prompt: "Search agents")
         .inspector(isPresented: $nav.inspector) {
             Group {
                 if let s = selected {
@@ -94,27 +100,6 @@ struct AgentsView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .background(Theme.panel.ignoresSafeArea())
         }
-        .toolbar {
-            ToolbarItem(placement: .principal) {
-                Picker("Provider", selection: $nav.filter) {
-                    Text("All").tag("all")
-                    Text("Claude").tag("claude")
-                    Text("Codex").tag("codex")
-                }
-                .pickerStyle(.segmented)
-                .frame(width: 210)
-            }
-            ToolbarItem {
-                Button { Launcher.openBoard() } label: { Label("Open in Terminal", systemImage: "terminal") }
-                    .help("Open the board in a terminal")
-            }
-            ToolbarItem {
-                Button { nav.inspector.toggle() } label: { Label("Inspector", systemImage: "sidebar.right") }
-                    .help("Show or hide the inspector")
-            }
-        }
-        .navigationTitle("Agents")
-        .navigationSubtitle(subtitle)
     }
 
     private var subtitle: String {
@@ -192,7 +177,7 @@ private struct FleetChart: View {
             HStack {
                 Eyebrow(text: "Fleet activity")
                 Spacer()
-                Text("peak \(Int(values.max() ?? 0)) · last 5 min")
+                Text("5 min")
                     .font(Theme.font(10.5)).foregroundStyle(.white.opacity(0.3))
             }
             Canvas { ctx, size in
@@ -288,6 +273,9 @@ struct AgentCard: View, Equatable {
                 Spacer(minLength: 6)
                 StatusPill(session: s, compact: true)
             }
+            .frame(height: 36, alignment: .top)
+            // Every row is always there and one line tall, so all cards are
+            // the same height and line up across the grid.
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Image(systemName: activitySymbol)
                     .font(Theme.font(11))
@@ -299,12 +287,17 @@ struct AgentCard: View, Equatable {
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
-            if let p = s.prompt, !p.isEmpty {
-                Text("“\(p)”")
-                    .font(Theme.font(11.5).italic())
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
+            .frame(height: 16, alignment: .leading)
+            Group {
+                if let p = s.prompt, !p.isEmpty {
+                    Text("“\(p)”").foregroundStyle(.white.opacity(0.5))
+                } else {
+                    Text("No prompt yet").foregroundStyle(.white.opacity(0.25))
+                }
             }
+            .font(Theme.font(11.5).italic())
+            .lineLimit(1)
+            .frame(height: 16, alignment: .leading)
             HStack(spacing: 8) {
                 Timeline(history: history)
                     .frame(height: 6)
@@ -312,7 +305,9 @@ struct AgentCard: View, Equatable {
                     SubagentChip(running: s.runningSubagents, total: sa.total)
                 }
             }
+            .frame(height: 20)
         }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
         .padding(.vertical, 14)
         .padding(.leading, 18)
         .padding(.trailing, 14)
