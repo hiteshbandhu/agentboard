@@ -13,7 +13,7 @@ https://github.com/user-attachments/assets/0703b8dc-140a-412b-a699-1a08c8b7aa7e
 
 
 
-[Install](#install) · [The board](#the-board) · [Notch & menu bar](#notch--menu-bar) · [Usage & limits](#usage--limits) · [Other machines](#other-machines) · [Privacy](#privacy)
+[Install](#install) · [The app](#the-app) · [The board](#the-board) · [Notch & menu bar](#notch--menu-bar) · [Usage & limits](#usage--limits) · [Other machines](#other-machines) · [Privacy](#privacy)
 
 </div>
 
@@ -66,6 +66,14 @@ Cards are grouped into **Needs you → Working → Idle**. Working cards spin; c
 | `q` | quit |
 
 Put it on a second display and leave it there.
+
+## The app
+
+![the Hall Monitor window](docs/window.png)
+
+Open **Hall Monitor** from the menu bar (⌘O) or the Dock for the full picture in a native window: every agent as a card with what it's doing, its last prompt, subagents and a five-minute timeline; details in the side panel; Return or a double-click jumps to it. **Usage** charts agent time per day, plan limits, when you work and your top projects, models and tools; **Machines** shows each SSH host and lets you add or remove them. It's light on your Mac: ~1% CPU in the menu bar, a few percent with the window open.
+
+![usage in the app](docs/window-usage.png)
 
 ## Notch & menu bar
 
