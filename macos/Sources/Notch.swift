@@ -14,6 +14,7 @@ final class NotchController {
     private var panel: NSPanel?
     private let model = NotchModel()
     private var hoverTimer: Timer?
+    private var cachedScreen: NSScreen?
     private var screenObserver: Any?
 
     func start(board: Board) {
@@ -25,9 +26,9 @@ final class NotchController {
         // Poll the pointer: global mouse monitors miss moves over the menu bar
         // and don't fire at all without an active event tap.
         hoverTimer = Timer.scheduledTimer(withTimeInterval: 0.08, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            Task { @MainActor in self.trackHover() }
+            MainActor.assumeIsolated { self?.trackHover() }
         }
+        hoverTimer?.tolerance = 0.03
     }
 
     func setEnabled(_ on: Bool) {
@@ -41,6 +42,7 @@ final class NotchController {
     }
 
     private func rebuild() {
+        cachedScreen = NotchController.notchedScreen
         panel?.orderOut(nil)
         panel = nil
         guard let screen = NotchController.notchedScreen,
@@ -74,7 +76,9 @@ final class NotchController {
     }
 
     private func trackHover() {
-        guard panel?.isVisible == true, let screen = NotchController.notchedScreen, let geo = model.geometry else { return }
+        // Cheap on purpose: runs ~12 times a second. The screen is cached and
+        // the panel is only touched when something changes.
+        guard let panel, panel.isVisible, let screen = cachedScreen, let geo = model.geometry else { return }
         let m = NSEvent.mouseLocation
         let top = screen.frame.maxY
         let zone: NSRect
@@ -89,7 +93,7 @@ final class NotchController {
         if inside != model.hovering { model.hovering = inside }
         // Clicks reach the rows only while the list is open; otherwise they
         // fall through to whatever is under the notch.
-        panel?.ignoresMouseEvents = !model.hovering
+        if panel.ignoresMouseEvents == model.hovering { panel.ignoresMouseEvents = !model.hovering }
     }
 }
 
@@ -373,8 +377,8 @@ private struct AgentRow: View {
                         .help(s.subagents?.label ?? "")
                     }
                     if s.working { Thinking(provider: s.provider).font(.system(size: 11)) }
-                    TimelineView(.periodic(from: .now, by: 1)) { ctx in
-                        Text(status(ctx.date))
+                    ClockText { now in
+                        Text(status(now))
                             .font(.system(size: 11, weight: .medium))
                             .monospacedDigit()
                             .foregroundStyle(color)
@@ -438,23 +442,91 @@ private struct AgentRow: View {
 /// clay, Codex's typing ellipsis.
 struct Thinking: View {
     let provider: String
-    private static let frames = ["·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"]
 
     var body: some View {
         if provider == "claude" {
-            TimelineView(.periodic(from: .now, by: 0.12)) { ctx in
-                let i = Int(ctx.date.timeIntervalSinceReferenceDate / 0.12) % Thinking.frames.count
-                Text(Thinking.frames[i])
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(Color(nsColor: Provider.color("claude")))
-                    .frame(width: 14)
-            }
+            SpinningGlyph(glyph: "✻", color: Provider.color("claude"), size: 14)
+                .frame(width: 14, height: 14)
         } else {
-            Image(systemName: "ellipsis")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundStyle(Color(nsColor: Provider.color(provider)))
-                .symbolEffect(.variableColor.iterative.dimInactiveLayers)
+            SpinningGlyph(glyph: "dots", color: Provider.color(provider), size: 14)
+                .frame(width: 16, height: 14)
         }
+    }
+}
+
+/// Claude Code's own thinking glyph: ✢ ✳ ✶ ✻ ✽ cycling, every 0.12 s.
+/// The frames are drawn once and handed to Core Animation as a keyframe
+/// animation of the layer's contents, so the window server plays it: no
+/// timers and no SwiftUI updates in this process, however many are on screen.
+struct SpinningGlyph: NSViewRepresentable {
+    let glyph: String   // unused; kept for call sites
+    let color: NSColor
+    let size: CGFloat
+    static let frames = ["·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"]
+    static let step = 0.12
+
+    /// Codex: three dots lighting up left to right, like its CLI.
+    static func dotFrames(color: NSColor, size: CGFloat) -> [NSAttributedString] {
+        let font = NSFont.systemFont(ofSize: size * 0.8, weight: .black)
+        return (0..<4).map { lit in
+            let s = NSMutableAttributedString()
+            for i in 0..<3 {
+                let a: CGFloat = lit == 3 ? 0.35 : (i == lit ? 1 : 0.35)
+                s.append(NSAttributedString(string: "•", attributes: [.font: font, .foregroundColor: color.withAlphaComponent(a)]))
+            }
+            return s
+        }
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let v = NSView()
+        v.wantsLayer = true
+        let scale = NSScreen.main?.backingScaleFactor ?? 2
+        let layer = CALayer()
+        layer.frame = CGRect(x: 0, y: 0, width: glyph == "dots" ? size * 1.15 : size, height: size)
+        layer.contentsScale = scale
+        layer.contentsGravity = .center
+        let images = SpinningGlyph.images(glyph: glyph, color: color, size: size, scale: scale)
+        layer.contents = images[min(4, images.count - 1)] // ✻ in stills
+        let anim = CAKeyframeAnimation(keyPath: "contents")
+        anim.values = images
+        anim.calculationMode = .discrete
+        anim.duration = (glyph == "dots" ? 0.22 : SpinningGlyph.step) * Double(images.count)
+        anim.repeatCount = .infinity
+        // Start each glyph at the same phase, like a shared clock.
+        anim.beginTime = 0
+        layer.add(anim, forKey: "think")
+        v.layer?.addSublayer(layer)
+        return v
+    }
+
+    func updateNSView(_ v: NSView, context: Context) {}
+
+    nonisolated(unsafe) private static var cache: [String: [CGImage]] = [:]
+
+    static func images(glyph: String, color: NSColor, size: CGFloat, scale: CGFloat) -> [CGImage] {
+        let key = "\(glyph)|\(color.description)|\(size)|\(scale)"
+        if let hit = cache[key] { return hit }
+        let font = NSFont.systemFont(ofSize: size, weight: .bold)
+        let strings: [NSAttributedString] = glyph == "dots"
+            ? dotFrames(color: color, size: size)
+            : frames.map { NSAttributedString(string: $0, attributes: [.font: font, .foregroundColor: color]) }
+        let width = glyph == "dots" ? size * 1.15 : size
+        let out: [CGImage] = strings.compactMap { str in
+            let px = Int(size * scale), pw = Int(width * scale)
+            guard let ctx = CGContext(data: nil, width: pw, height: px, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+            ctx.scaleBy(x: scale, y: scale)
+            NSGraphicsContext.saveGraphicsState()
+            NSGraphicsContext.current = NSGraphicsContext(cgContext: ctx, flipped: false)
+            let b = str.size()
+            str.draw(at: CGPoint(x: (width - b.width) / 2, y: (size - b.height) / 2))
+            NSGraphicsContext.restoreGraphicsState()
+            return ctx.makeImage()
+        }
+        cache[key] = out
+        return out
     }
 }
 

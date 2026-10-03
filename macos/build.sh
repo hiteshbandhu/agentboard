@@ -13,6 +13,7 @@ out=build/HallMonitor.app
 rm -rf build && mkdir -p "$out/Contents/MacOS" "$out/Contents/Helpers" "$out/Contents/Resources"
 cp Info.plist "$out/Contents/Info.plist"
 cp AppIcon.icns "$out/Contents/Resources/"
+cp -R Fonts "$out/Contents/Resources/"
 
 swiftc -O -parse-as-library -target arm64-apple-macos14.0 \
   -framework SwiftUI -framework AppKit -framework UserNotifications \

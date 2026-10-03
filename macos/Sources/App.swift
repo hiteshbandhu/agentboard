@@ -32,6 +32,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
     private var status: StatusMenu?
     private var defaultsObserver: Any?
     private var settingsWindow: NSWindow?
+    private lazy var main = MainWindow(board: board)
 
     func applicationDidFinishLaunching(_ note: Notification) {
         Main.migrateSettings()
@@ -51,6 +52,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
         status = StatusMenu(board: board)
         status?.onSettings = { [weak self] in self?.showSettings() }
+        status?.onOpen = { [weak self] pane in self?.main.show(pane) }
+        MainMenu.install(openPane: { [weak self] p in self?.main.show(p) }, settings: { [weak self] in self?.showSettings() })
+        if CommandLine.arguments.contains("--window") { main.show() }
         notch.start(board: board)
         defaultsObserver = NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification, object: nil, queue: .main
@@ -73,6 +77,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, UNUserNotificationCent
         }
         NSApp.activate(ignoringOtherApps: true)
         settingsWindow?.makeKeyAndOrderFront(nil)
+    }
+
+    /// Clicking the Dock icon (or opening the app again) brings the window back.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        main.show()
+        return true
     }
 
     func applicationWillTerminate(_ note: Notification) {

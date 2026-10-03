@@ -42,7 +42,7 @@ enum SnapshotMode {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
                             render(model, geo, dir, "notch_banner_done")
                             renderView(SettingsView(), size: NSSize(width: 460, height: 420), dir, "settings")
-                            NSApp.terminate(nil)
+                            renderWindow(board: board, dir: dir) { NSApp.terminate(nil) }
                         }
                     }
                 }
@@ -50,11 +50,28 @@ enum SnapshotMode {
         }
     }
 
+    /// The main window, each pane, after a couple of snapshots of history.
+    private static func renderWindow(board: Board, dir: String, done: @escaping () -> Void) {
+        let usage = UsageStore(board: board)
+        usage.load()
+        let nav = Nav()
+        nav.selection = board.sessions.first(where: \.working)?.key
+        // Let a few snapshots arrive so the timelines and fleet chart have data.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 12) {
+            for pane in Pane.allCases {
+                nav.pane = pane
+                renderView(MainView(board: board, usage: usage, nav: nav).transaction { $0.animation = nil },
+                           size: NSSize(width: 1280, height: 820), dir, "window_\(pane.rawValue)", opaque: true)
+            }
+            done()
+        }
+    }
+
     private static func render(_ model: NotchModel, _ geo: NotchGeometry, _ dir: String, _ name: String) {
         renderView(NotchView(model: model).transaction { $0.animation = nil }, size: geo.canvas, dir, name)
     }
 
-    private static func renderView<V: View>(_ view: V, size: NSSize, _ dir: String, _ name: String) {
+    private static func renderView<V: View>(_ view: V, size: NSSize, _ dir: String, _ name: String, opaque: Bool = false) {
         let host = NSHostingView(rootView: view)
         host.frame = NSRect(origin: .zero, size: size)
         let win = NSWindow(contentRect: NSRect(x: -20000, y: -20000, width: size.width, height: size.height),

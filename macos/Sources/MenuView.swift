@@ -13,6 +13,7 @@ final class StatusMenu: NSObject, NSMenuDelegate {
     private var bag: Set<AnyCancellable> = []
     private var isOpen = false
     var onSettings: (() -> Void)?
+    var onOpen: ((Pane) -> Void)?
 
     init(board: Board) {
         self.board = board
@@ -146,8 +147,9 @@ final class StatusMenu: NSObject, NSMenuDelegate {
         usage()
 
         menu.addItem(.separator())
-        menu.addItem(action("Open Board", "rectangle.grid.2x2", key: "o", #selector(openBoard)))
-        menu.addItem(action("Usage Dashboard", "chart.bar.xaxis", key: "u", #selector(openUsage)))
+        menu.addItem(action("Open Hall Monitor", "rectangle.grid.2x2", key: "o", #selector(openBoard)))
+        menu.addItem(action("Usage", "chart.bar.xaxis", key: "u", #selector(openUsage)))
+        menu.addItem(action("Board in Terminal", "terminal", key: "t", #selector(openTerminal)))
         menu.addItem(.separator())
         menu.addItem(action("Settings…", "gearshape", key: ",", #selector(openSettings)))
         menu.addItem(action("Quit Hall Monitor", nil, key: "q", #selector(quit)))
@@ -283,8 +285,9 @@ final class StatusMenu: NSObject, NSMenuDelegate {
 
     // MARK: Actions
 
-    @objc private func openBoard() { Launcher.openBoard() }
-    @objc private func openUsage() { Launcher.openBoard(view: "usage") }
+    @objc private func openBoard() { onOpen?(.agents) }
+    @objc private func openUsage() { onOpen?(.usage) }
+    @objc private func openTerminal() { Launcher.openBoard() }
 
     @objc private func openSettings() { onSettings?() }
 

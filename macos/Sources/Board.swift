@@ -50,6 +50,47 @@ struct Subagents: Decodable, Hashable {
     }
 }
 
+struct FleetSample: Hashable {
+    var at: Date
+    var working: Int
+    var needsYou: Int
+}
+
+struct Machine: Identifiable, Hashable {
+    var name: String
+    var host: String?          // ssh destination; nil for this Mac
+    var error: String?
+    var agents: [Session]
+    var id: String { host ?? "local" }
+    var live: Bool { error == nil }
+
+    /// "dev@gpu-box" -> "gpu-box", as the board labels hosts.
+    static func label(_ dest: String) -> String {
+        if let at = dest.lastIndex(of: "@") { return String(dest[dest.index(after: at)...]) }
+        return dest
+    }
+}
+
+/// ~/.config/hallmonitor/hosts: one ssh destination per line.
+enum Hosts {
+    static var path: String {
+        let env = ProcessInfo.processInfo.environment["XDG_CONFIG_HOME"] ?? ""
+        let base = env.isEmpty ? NSHomeDirectory() + "/.config" : env
+        return base + "/hallmonitor/hosts"
+    }
+
+    static func read() -> [String] {
+        guard let s = try? String(contentsOfFile: path, encoding: .utf8) else { return [] }
+        return s.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty && !$0.hasPrefix("#") }
+    }
+
+    static func write(_ hosts: [String]) {
+        try? FileManager.default.createDirectory(atPath: (path as NSString).deletingLastPathComponent, withIntermediateDirectories: true)
+        try? (hosts.joined(separator: "\n") + "\n").write(toFile: path, atomically: true, encoding: .utf8)
+    }
+}
+
 struct AdapterError: Decodable, Hashable {
     var provider: String
     var error: String
@@ -112,6 +153,12 @@ final class Board: ObservableObject {
     @Published private(set) var problem: String?
     @Published private(set) var today: Counters?
     @Published private(set) var limits: [(key: String, value: RateLimit)] = []
+    /// Each session's status, sampled per snapshot (every 2 s), oldest
+    /// first, for the timelines in the window.
+    @Published private(set) var history: [String: [UInt8]] = [:]
+    /// How many agents were working / needed you, per snapshot.
+    @Published private(set) var fleet: [FleetSample] = []
+    static let historyLength = 150 // 5 minutes
 
     /// Called for each status change worth telling the user about.
     var onEvent: ((BoardEvent) -> Void)?
@@ -185,7 +232,7 @@ final class Board: ObservableObject {
 
     // Run through the user's login shell so PATH has claude, codex and
     // hallmonitor even though Finder launched us with a bare environment.
-    private func shellCommand(_ args: String, env: String = "") -> Process {
+    func shellCommand(_ args: String, env: String = "") -> Process {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh")
         p.arguments = ["-lc", "\(env)exec \(Board.binary) \(args)"]
@@ -272,10 +319,43 @@ final class Board: ObservableObject {
         }
         previous = next
         seededOnce = true
+        record(snap.sessions)
         let publisher = objectWillChange
         ProjectIcon.prefetch(snap.sessions) {
             DispatchQueue.main.async { publisher.send() }
         }
+    }
+
+    private func record(_ list: [Session]) {
+        var h = history
+        var seen = Set<String>()
+        for s in list {
+            seen.insert(s.key)
+            var row = h[s.key] ?? []
+            row.append(s.needsYou ? 2 : s.working ? 1 : 0)
+            if row.count > Board.historyLength { row.removeFirst(row.count - Board.historyLength) }
+            h[s.key] = row
+        }
+        for k in h.keys where !seen.contains(k) { h[k] = nil }
+        history = h
+        var f = fleet
+        f.append(FleetSample(at: Date(), working: list.filter(\.working).count, needsYou: list.filter(\.needsYou).count))
+        if f.count > Board.historyLength { f.removeFirst(f.count - Board.historyLength) }
+        fleet = f
+    }
+
+    /// Machines: this Mac, plus every host in the hosts file or the feed.
+    var machines: [Machine] {
+        var out = [Machine(name: "This Mac", host: nil, error: nil,
+                           agents: sessions.filter { ($0.host ?? "").isEmpty && !$0.stale })]
+        var names = Hosts.read()
+        for s in sessions { if let h = s.host, !h.isEmpty, !names.contains(where: { Machine.label($0) == h }) { names.append(h) } }
+        for n in names {
+            let label = Machine.label(n)
+            let err = errors.first { $0.provider == "host:" + label }?.error
+            out.append(Machine(name: label, host: n, error: err, agents: sessions.filter { $0.host == label && !$0.stale }))
+        }
+        return out
     }
 
     func refreshUsage() {
